@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     WEBSITE_CHECK_WORKERS: int = 10
     WEBSITE_USER_AGENT: str = "Mozilla/5.0 (compatible; IsletmeRadari/1.0)"
 
+    # Postgres bağlantı dizesi; doluysa tüm kalıcı veri burada tutulur.
+    # Boşsa SQLite dosyası kullanılır (yerel geliştirme + testler).
+    DATABASE_URL: str = ""
     # Tarama geçmişinin tutulduğu SQLite dosyası (boş = <proje kökü>/data/scans.db).
     DB_PATH: str = ""
 

@@ -19,7 +19,8 @@ veya **eski görünümlü web sitesi** olan işletmeleri bulan tek ekranlı uygu
    Modal'ın üstündeki açılır listeden **Hızlı Mesajlar** ekranında kayıtlı
    şablonlar seçilip metni doldurur.
 
-Her başarılı tarama sonucuyla birlikte **SQLite**'a (`data/scans.db`) kaydedilir;
+Her başarılı tarama sonucuyla birlikte veritabanına (Docker'da **PostgreSQL**,
+yerelde **SQLite** `data/scans.db`) kaydedilir;
 "Önceki Taramalar" ekranından geri açılabilir. **Kalp** ikonu iki yerde vardır:
 tarama satırında taramayı, işletme tablosu satırlarında işletmeyi favoriler.
 **Favoriler** ekranı iki bölümdür: "Favori İşletmeler" tablosu + "Favori Taramalar"
@@ -33,7 +34,7 @@ taşınan bir oturum token'ıdır (`SESSION_TTL_DAYS` gün geçerli).
 
 - Taramalar ve favoriler **kullanıcıya bağlıdır** — kullanıcılar birbirlerinin
   kayıtlarını göremez.
-- Parolalar PBKDF2-HMAC-SHA256 ile hash'lenerek `data/scans.db`'de tutulur;
+- Parolalar PBKDF2-HMAC-SHA256 ile hash'lenerek veritabanında tutulur;
   yeni kullanıcı eklemek için `users` tablosuna `services/auth.py`'deki
   `hash_password` ile satır eklenebilir.
 
@@ -46,8 +47,10 @@ taşınan bir oturum token'ıdır (`SESSION_TTL_DAYS` gün geçerli).
   ekranlar: Giriş, Tarama, Önceki Taramalar, Favoriler, Hızlı Mesajlar
 - **Harita:** Leaflet + OpenStreetMap (anahtarsız)
 - **Veri:** Google Places API (New) — anahtar gerekli
-- **Depolama:** SQLite (`data/scans.db`) — tarama geçmişi, kullanıcılar, oturumlar,
-  favoriler; ek kurulum gerekmez
+- **Depolama:** PostgreSQL (Docker'da `db` servisi, `pgdata` volume) — tarama
+  geçmişi, kullanıcılar, oturumlar, favoriler, hızlı mesajlar. `DATABASE_URL`
+  boşsa yerelde SQLite'a (`data/scans.db`) düşer; ek kurulum gerekmez. İlk
+  açılışta boş Postgres'e eski SQLite verisi otomatik taşınır.
 
 ## Kurulum (yerel)
 
@@ -75,8 +78,9 @@ docker compose up -d --build   # frontend + backend tek komutla
 
 Arayüz: `http://localhost:${WEB_PORT:-3000}` (çakışırsa `.env`'de `WEB_PORT`
 değiştir). Backend host portu açmaz — frontend, `/api/*` isteklerini compose
-ağı içinden `backend:8000`'e proxy'ler. Veritabanı (SQLite) `./data` altında
-durur ve volume ile container'a bağlanır.
+ağı içinden `backend:8000`'e proxy'ler. Veritabanı Postgres'tir (`db` servisi,
+`pgdata` volume); `./data`'daki eski SQLite dosyası ilk açılışta boş Postgres'e
+aktarılır.
 
 Durdurmak: `docker compose down`.
 
@@ -115,6 +119,8 @@ Bkz. `.env.example`. Önemlileri:
 | `PLACES_MAX_CALLS` | Tarama başına Places çağrı üst sınırı (vars. 9) |
 | `WEBSITE_CHECK_LIMIT` | Site analizi yapılacak en fazla işletme (vars. 60) |
 | `CORS_ORIGINS` | Backend'e doğrudan erişecek kökenler |
+| `DATABASE_URL` | Postgres bağlantı dizesi (boş = SQLite; Docker'da compose ayarlar) |
+| `POSTGRES_PASSWORD` | Docker `db` servisi parolası (vars. radar) |
 | `DB_PATH` | Geçmiş SQLite dosyası (vars. `data/scans.db`) |
 | `SESSION_TTL_DAYS` | Oturum geçerliliği, gün (vars. 30) |
 | `WEB_PORT` | Docker'da frontend portu (vars. 3000) |

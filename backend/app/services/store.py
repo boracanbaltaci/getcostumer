@@ -1,9 +1,13 @@
-"""Kalıcı kayıtlar — SQLite'ta tek dosya (`data/scans.db`).
+"""Kalıcı kayıtlar — PostgreSQL (`DATABASE_URL`) veya SQLite (`data/scans.db`).
 
 Tarama geçmişi, kullanıcılar, oturumlar ve favoriler burada tutulur.
 İşletme listesi JSON blob olarak saklanır; liste ekranı işletme detayını
 getirmez, tek kayıt açıldığında blob çözülür. Tüm sorgular kullanıcı
 bazlıdır: kayıtlar `user_id` ile sahibine bağlanır.
+
+`DATABASE_URL` doluysa Postgres'e bağlanılır (Docker); boşsa yerel
+geliştirme ve testler için SQLite dosyası kullanılır. SQL'ler `?`
+yer tutuculu yazılır; Postgres'te `%s`'e çevrilir.
 """
 from __future__ import annotations
 
@@ -71,7 +75,41 @@ def _utcnow() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
-def _connect() -> sqlite3.Connection:
+def _pg() -> bool:
+    return bool(settings.DATABASE_URL)
+
+
+class _PgCompat:
+    """psycopg bağlantısını sqlite3 benzeri arayüze sarar.
+
+    `?` yer tutucuları `%s`'e çevirir; `with` bloğu çıkışında psycopg
+    commit/close yapar (sqlite3 bağlam yöneticisiyle aynı sözleşme).
+    """
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._conn.__exit__(exc_type, exc, tb)
+
+    def execute(self, sql: str, params: tuple = ()):
+        return self._conn.execute(sql.replace("?", "%s"), params)
+
+    def executescript(self, script: str) -> None:
+        for stmt in script.split(";"):
+            if stmt.strip():
+                self._conn.execute(stmt)
+
+
+def _connect():
+    if _pg():
+        import psycopg
+        from psycopg.rows import dict_row
+
+        return _PgCompat(psycopg.connect(settings.DATABASE_URL, row_factory=dict_row))
     conn = sqlite3.connect(settings.db_path, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -79,6 +117,15 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
+    if _pg():
+        with _connect() as conn:
+            # Postgres'te REAL 4 bayattır; koordinat hassasiyeti için DOUBLE PRECISION.
+            conn.executescript(_SCHEMA.replace("REAL", "DOUBLE PRECISION"))
+            # Tek kullanıcılı dönemden kalan scans tablosunda user_id eksikse
+            # eklenir (yeni şemada zaten var; IF NOT EXISTS no-op olur).
+            conn.execute(
+                "ALTER TABLE scans ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT ''")
+        return
     os.makedirs(os.path.dirname(settings.db_path), exist_ok=True)
     with _connect() as conn:
         # Tek kullanıcılı dönemden kalan scans tablosuna önce kolon eklenir ki
@@ -95,6 +142,45 @@ def claim_unowned_scans(user_id: str) -> None:
     """Kullanıcı kavramı öncesi kayıtları (user_id='') verilen kullanıcıya bağlar."""
     with _connect() as conn:
         conn.execute("UPDATE scans SET user_id = ? WHERE user_id = ''", (user_id,))
+
+
+_IMPORT_TABLES = ("users", "sessions", "scans", "favorites",
+                  "business_favorites", "quick_messages")
+
+
+def import_sqlite_if_empty(sqlite_path: str) -> int:
+    """Postgres modunda, users tablosu boşken eski SQLite dosyasını aktarır.
+
+    Bir kere çalışması amaçlanır; users doluysa ya da dosya yoksa no-op.
+    Dönüş: taşınan satır sayısı.
+    """
+    if not _pg() or not os.path.isfile(sqlite_path) or not users_empty():
+        return 0
+    src = sqlite3.connect(sqlite_path)
+    src.row_factory = sqlite3.Row
+    moved = 0
+    try:
+        names = {r[0] for r in src.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        with _connect() as conn:
+            for table in _IMPORT_TABLES:
+                if table not in names:
+                    continue
+                rows = src.execute(f"SELECT * FROM {table}").fetchall()
+                if not rows:
+                    continue
+                cols = list(rows[0].keys())
+                marks = ", ".join(["?"] * len(cols))
+                for r in rows:
+                    conn.execute(
+                        f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({marks})"
+                        " ON CONFLICT DO NOTHING",
+                        tuple(r[c] for c in cols),
+                    )
+                    moved += 1
+    finally:
+        src.close()
+    return moved
 
 
 # ---- Kullanıcılar ----
@@ -247,6 +333,8 @@ def add_favorite(user_id: str, scan_id: str) -> bool:
         if owned is None:
             return False
         conn.execute(
+            ("INSERT INTO favorites (user_id, scan_id, added_at) VALUES (?, ?, ?)"
+             " ON CONFLICT DO NOTHING") if _pg() else
             "INSERT OR IGNORE INTO favorites (user_id, scan_id, added_at) VALUES (?, ?, ?)",
             (user_id, scan_id, _utcnow()),
         )
@@ -285,12 +373,24 @@ def add_business_favorite(user_id: str, place_id: str,
                           business: Dict[str, Any], scan_id: str = "") -> None:
     """İşletme snapshot'ını favoriler; tekrar ekleme snapshot'ı tazeler."""
     with _connect() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO business_favorites"
-            " (user_id, place_id, scan_id, added_at, business_json) VALUES (?, ?, ?, ?, ?)",
-            (user_id, place_id, scan_id, _utcnow(),
-             json.dumps(business, ensure_ascii=False)),
-        )
+        params = (user_id, place_id, scan_id, _utcnow(),
+                  json.dumps(business, ensure_ascii=False))
+        if _pg():
+            conn.execute(
+                "INSERT INTO business_favorites"
+                " (user_id, place_id, scan_id, added_at, business_json)"
+                " VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT (user_id, place_id) DO UPDATE SET"
+                " scan_id = EXCLUDED.scan_id, added_at = EXCLUDED.added_at,"
+                " business_json = EXCLUDED.business_json",
+                params,
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO business_favorites"
+                " (user_id, place_id, scan_id, added_at, business_json) VALUES (?, ?, ?, ?, ?)",
+                params,
+            )
 
 
 def remove_business_favorite(user_id: str, place_id: str) -> bool:
@@ -308,7 +408,8 @@ def list_quick_messages(user_id: str) -> List[Dict[str, Any]]:
     with _connect() as conn:
         rows = conn.execute(
             "SELECT id, text, created_at FROM quick_messages"
-            " WHERE user_id = ? ORDER BY created_at DESC, rowid DESC",
+            " WHERE user_id = ? ORDER BY created_at DESC"
+            + (", id DESC" if _pg() else ", rowid DESC"),
             (user_id,),
         ).fetchall()
     return [dict(r) for r in rows]

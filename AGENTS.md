@@ -13,13 +13,15 @@ Türkçe olabilir; **kullanıcıyla tüm iletişim Türkçe'dir.**
     `GET/POST/DELETE /api/quick-messages[/{id}]` (hızlı mesaj şablonları)
   - `services/places.py` — Google Places API (New) Nearby Search istemcisi
   - `services/sitescan.py` — web sitesi "eski görünümlü mü?" sezgisel analizi
-  - `services/store.py` — tarama geçmişi + kullanıcılar/oturumlar/favoriler (SQLite)
+  - `services/store.py` — tarama geçmişi + kullanıcılar/oturumlar/favoriler
+    (Postgres `DATABASE_URL` veya SQLite fallback)
   - `services/auth.py` — pbkdf2 parola doğrulama, oturum cookie, `get_current_user`
 - **Frontend:** Next.js (App Router), TypeScript, Tailwind, Leaflet (react-leaflet) —
   `frontend/src/`; tek sayfa `app/page.tsx`, bileşenler `components/` (giriş ekranı
   dahil)
-- **Veritabanı:** SQLite (`data/scans.db`) — taramalar, favoriler, kullanıcılar,
-  oturumlar; `*.db` gitignore'da.
+- **Veritabanı:** `DATABASE_URL` doluysa PostgreSQL (Docker `db` servisi,
+  `pgdata` volume), boşsa SQLite (`data/scans.db` — yerel dev + testler);
+  `*.db` gitignore'da. Postgres boşken `data/scans.db` ilk açılışta aktarılır.
 - Frontend `/api/*` isteklerini `next.config.js` rewrite'ı ile backend'e proxy'ler.
 
 ## Temel ilkeler

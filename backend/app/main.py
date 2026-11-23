@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     store.init_db()
+    # Postgres'e ilk geçişte eski SQLite dosyası boş DB'ye tek sefer aktarılır
+    # (admin seed'inden önce çalışmalı ki users tablosu boş görünsün).
+    moved = store.import_sqlite_if_empty(settings.db_path)
+    if moved:
+        logger.info("SQLite'tan PostgreSQL'e %s kayıt aktarıldı.", moved)
     # Kullanıcı yoksa admin/admin aç; eski sahipsiz taramaları bu hesaba bağla.
     store.claim_unowned_scans(auth.ensure_admin()["id"])
     yield
