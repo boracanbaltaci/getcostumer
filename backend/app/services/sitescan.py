@@ -23,6 +23,21 @@ logger = logging.getLogger(__name__)
 OLD_THRESHOLD = 4
 
 # Park edilmiş / satılık alan adı sayfaları: işletmenin gerçek sitesi değildir.
+# Google'ın "website" alanında döndürdüğü ama gerçek site sayılmayan bağlantılar:
+# işletmenin kendi sitesi değil, sosyal medya/link-toplama profili.
+SOCIAL_WEBSITE_DOMAINS = (
+    "instagram.com", "facebook.com", "fb.com", "fb.me",
+    "twitter.com", "x.com", "tiktok.com", "youtube.com",
+    "wa.me", "whatsapp.com", "linktr.ee", "beacons.ai", "bio.link",
+)
+
+
+def is_social_site(url: str) -> bool:
+    """websiteUri aslında sosyal medya profiliyse True — 'site yok' sayılır."""
+    host = (urlparse(url).hostname or "").lower()
+    return any(host == d or host.endswith("." + d) for d in SOCIAL_WEBSITE_DOMAINS)
+
+
 PARKED_MARKERS = (
     "domain for sale", "this domain is for sale", "buy this domain",
     "alan adı satılık", "bu alan adı satılık", "domain satılık",

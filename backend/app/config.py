@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# .env proje kökündedir (backend/ üstü); çalışma dizininden bağımsız bulunur.
+_ENV_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"
+)
 
 
 class Settings(BaseSettings):
     """Uygulama yapılandırması; değerler .env dosyasından okunur."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_PATH, env_file_encoding="utf-8", extra="ignore")
 
     ENVIRONMENT: str = "development"
     GOOGLE_PLACES_API_KEY: str = ""

@@ -28,13 +28,13 @@ TYPE_GROUPS: list[list[str]] = [
     ["restaurant", "cafe", "coffee_shop", "bakery", "meal_takeaway", "meal_delivery", "bar"],
     ["beauty_salon", "hair_care", "barber_shop", "spa", "nail_salon"],
     ["car_repair", "car_wash", "car_dealer", "car_rental", "auto_parts_store"],
-    ["doctor", "dentist", "pharmacy", "physiotherapist", "veterinarian", "hospital"],
+    ["doctor", "dentist", "pharmacy", "physiotherapist", "hospital"],
     ["lawyer", "accounting", "real_estate_agency", "insurance_agency", "travel_agency"],
-    ["supermarket", "grocery_or_supermarket", "convenience_store", "clothing_store",
+    ["supermarket", "convenience_store", "clothing_store",
      "shoe_store", "jewelry_store", "furniture_store", "hardware_store",
      "electronics_store", "book_store", "florist", "pet_store"],
     ["laundry", "locksmith", "moving_company", "plumber", "electrician", "painter",
-     "roofing_contractor", "general_contractor"],
+     "roofing_contractor"],
     ["gym", "fitness_center", "hotel", "motel", "lodging"],
 ]
 

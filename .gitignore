@@ -7,6 +7,5 @@ __pycache__/
 node_modules/
 .next/
 *.tsbuildinfo
-docs/SESSION_CONTEXT.md
 .DS_Store
 docs/SESSION_CONTEXT.md

@@ -48,17 +48,20 @@ def scan(req: ScanRequest):
 
     # Web sitesi olan işletmeleri eşzamanlı incele; tek kayıt hatası akışı durdurmaz.
     def inspect(rec: dict) -> BusinessOut | None:
+        url = rec["website"]
+        if sitescan.is_social_site(url):
+            return BusinessOut(**rec, website_status="yok",
+                               website_notes=["site yerine sosyal medya bağlantısı"])
         try:
-            verdict = sitescan.check_website(rec["website"], now_year)
+            verdict = sitescan.check_website(url, now_year)
         except Exception as exc:  # dayanıklı kayıt: site analizi patlarsa 'erişilemedi' say
-            logger.warning("Site analizi başarısız %s: %s", rec.get("website"), exc)
+            logger.warning("Site analizi başarısız %s: %s", url, exc)
             return BusinessOut(**rec, website_status="erisilemedi",
                                website_notes=[f"analiz hatası: {exc.__class__.__name__}"])
         if verdict.status == "modern":
             return None
-        return BusinessOut(**rec, website_status=verdict.status,
-                           website=verdict.final_url or rec["website"],
-                           website_notes=verdict.notes)
+        return BusinessOut(**{**rec, "website": verdict.final_url or url},
+                           website_status=verdict.status, website_notes=verdict.notes)
 
     checked = [r for r in records if r.get("website")][: settings.WEBSITE_CHECK_LIMIT]
     if len([r for r in records if r.get("website")]) > settings.WEBSITE_CHECK_LIMIT:

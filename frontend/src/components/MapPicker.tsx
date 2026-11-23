@@ -1,9 +1,6 @@
 "use client";
 
 import L from "leaflet";
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { Circle, MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
 
 export interface PickedLocation {
@@ -11,10 +8,12 @@ export interface PickedLocation {
   lng: number;
 }
 
+// Pin görselleri public/leaflet/ altından servis edilir (bundler importu yerine
+// sabit URL — Turbopack'te görsel importları düz string döner).
 const pin = L.icon({
-  iconUrl: markerIcon.src,
-  iconRetinaUrl: markerIcon2x.src,
-  shadowUrl: markerShadow.src,
+  iconUrl: "/leaflet/marker-icon.png",
+  iconRetinaUrl: "/leaflet/marker-icon-2x.png",
+  shadowUrl: "/leaflet/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
