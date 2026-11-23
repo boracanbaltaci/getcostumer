@@ -1,51 +1,13 @@
-name: ankara-business-radar
+name: isletme-radari
 
-x-backend-env: &backend-env
-  env_file: .env
-  environment:
-    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-radar}:${POSTGRES_PASSWORD:-radar}@db:5432/${POSTGRES_DB:-radar}
-    REDIS_URL: redis://redis:6379/0
-    INBOX_DIR: /data/inbox
-    UPLOAD_DIR: /data/uploads
-    TZ: Europe/Istanbul
+# Tek ekranlı uygulama: backend (FastAPI) + frontend (Next.js). Veritabanı yok;
+# tarama sonuçları oturum içinde gösterilir, saklanmaz.
 
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-radar}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-radar}
-      POSTGRES_DB: ${POSTGRES_DB:-radar}
-      TZ: Europe/Istanbul
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-radar} -d ${POSTGRES_DB:-radar}"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      retries: 20
-
   backend:
     build: ./backend
     restart: unless-stopped
-    <<: *backend-env
-    depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    volumes:
-      - ./data:/data
+    env_file: .env
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -53,36 +15,15 @@ services:
       interval: 15s
       retries: 10
 
-  worker:
-    build: ./backend
-    restart: unless-stopped
-    <<: *backend-env
-    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
-    depends_on:
-      backend: { condition: service_healthy }
-    volumes:
-      - ./data:/data
-
-  beat:
-    build: ./backend
-    restart: unless-stopped
-    <<: *backend-env
-    # Günlük tarama: her gün 08:30 (Europe/Istanbul)
-    command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
-    depends_on:
-      backend: { condition: service_healthy }
-
   frontend:
     build:
       context: ./frontend
       args:
         BACKEND_URL: http://backend:8000
     restart: unless-stopped
+    environment:
+      KEEP_ALIVE_TIMEOUT: ${KEEP_ALIVE_TIMEOUT:-120000}
     depends_on:
       backend: { condition: service_healthy }
     ports:
-      - "${WEB_PORT:-3000}:3000"
-
-volumes:
-  pgdata:
-  redisdata:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"

@@ -6,9 +6,7 @@ __pycache__/
 *.db
 node_modules/
 .next/
-data/inbox/*
-data/uploads/*
-!data/inbox/.gitkeep
-!data/uploads/.gitkeep
-.DS_Store
 *.tsbuildinfo
+docs/SESSION_CONTEXT.md
+.DS_Store
+docs/SESSION_CONTEXT.md

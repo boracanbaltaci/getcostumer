@@ -1,129 +1,141 @@
 "use client";
 
-import Link from "next/link";
-import { Alert, Badge, Card, HEALTH, JOB_STATUS, Score, Spinner, Stat, Table, Td } from "@/components/ui";
-import { fmtDate, fmtDateTime } from "@/lib/api";
-import { useApi } from "@/lib/hooks";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
+import { Loader2, MapPin, ScanSearch } from "lucide-react";
+import MessageModal, { type MessageKind } from "@/components/MessageModal";
+import ResultsTable from "@/components/ResultsTable";
+import { getConfig, scanArea, type Business, type ScanResponse } from "@/lib/api";
 
-type Coverage = { date: string; status: string; weekend: boolean; new_businesses: number | null };
+const MapPicker = dynamic(() => import("@/components/MapPicker"), {
+  ssr: false,
+  loading: () => <div className="flex h-full items-center justify-center text-sm text-slate-400">Harita yükleniyor…</div>,
+});
 
-const COV: Record<string, { cls: string; label: string }> = {
-  covered: { cls: "bg-emerald-500", label: "Tarandı" },
-  partial: { cls: "bg-amber-400", label: "Kısmi" },
-  failed: { cls: "bg-red-500", label: "Erişim hatası" },
-  not_scanned: { cls: "bg-slate-300", label: "Taranmadı" },
-};
+const RADIUS_OPTIONS = [
+  { value: 500, label: "500 m" },
+  { value: 1000, label: "1 km" },
+  { value: 2000, label: "2 km" },
+  { value: 5000, label: "5 km" },
+];
 
-export default function Dashboard() {
-  const { data, error } = useApi<any>("/dashboard");
-  if (error) return <Alert tone="red">{error}</Alert>;
-  if (!data) return <Spinner />;
-  const m = data.metrics;
-  const today: Coverage | undefined = data.coverage[data.coverage.length - 1];
-  const todayScanned = today?.status === "covered";
+export default function Home() {
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [radius, setRadius] = useState(1000);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<ScanResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
+
+  useEffect(() => {
+    getConfig()
+      .then((c) => setConfigured(c.google_places_configured))
+      .catch(() => setConfigured(null));
+  }, []);
+
+  async function handleScan() {
+    if (!location || scanning) return;
+    setScanning(true);
+    setError(null);
+    try {
+      setResult(await scanArea(location.lat, location.lng, radius));
+    } catch (e) {
+      setResult(null);
+      setError(e instanceof Error ? e.message : "Tarama başarısız oldu");
+    } finally {
+      setScanning(false);
+    }
+  }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+    <main className="mx-auto max-w-7xl p-4 lg:p-6">
+      <header className="mb-4 flex items-center gap-3">
+        <ScanSearch className="text-brand-600" size={26} />
         <div>
-          <h1 className="text-xl font-bold">Gösterge Paneli</h1>
-          <p className="text-sm text-slate-500">Ankara'da yeni kurulan işletmeler · İSG ve yazılım fırsatları</p>
+          <h1 className="text-lg font-bold text-slate-900">İşletme Radarı</h1>
+          <p className="text-xs text-slate-500">Web sitesi olmayan veya eski siteli işletmeleri bulur</p>
         </div>
-        {data.last_job && (
-          <div className="text-xs text-slate-500">
-            Son günlük tarama: {fmtDateTime(data.last_job.started_at)}{" "}
-            <Badge tone={JOB_STATUS[data.last_job.status]?.tone}>{JOB_STATUS[data.last_job.status]?.label || data.last_job.status}</Badge>
-          </div>
-        )}
-      </div>
+      </header>
 
-      {!todayScanned && (
-        <Alert>
-          <b>Bugün için yetkili kaynaklardan tarama yapılamadı.</b> Aşağıdaki "bugün tespit edilen" sayısı yalnızca
-          içe aktarılan kayıtları yansıtır; "sıfır yeni kuruluş" anlamına gelmez. Durumu{" "}
-          <Link className="underline" href="/sources">Veri Kaynakları</Link> sayfasından kontrol edin.
-        </Alert>
-      )}
-      {m.needs_review > 0 && (
-        <Alert tone="blue"><Link href="/review" className="underline">{m.needs_review} kayıt</Link> manuel inceleme bekliyor (kuruluş ilanı olup olmadığı otomatik doğrulanamadı).</Alert>
+      {configured === false && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>Google Places API anahtarı tanımlı değil.</strong> Tarama yapabilmek için
+          backend <code className="rounded bg-amber-100 px-1">.env</code> dosyasına{" "}
+          <code className="rounded bg-amber-100 px-1">GOOGLE_PLACES_API_KEY</code> ekleyip
+          servisi yeniden başlatın (README → "Google API anahtarı alma").
+        </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <Stat label="Bugün tespit edilen" value={m.today_detected} href="/businesses?today=1" tone={todayScanned ? "default" : "warn"}
-          hint={todayScanned ? "Bugün taranan kaynaklardan" : "Bugün tarama yapılmadı"} />
-        <Stat label="Son 7 gün kuruluş" value={m.last7_established} href="/businesses?range=7" />
-        <Stat label="Son 30 gün kuruluş" value={m.last30_established} href="/businesses?range=30" />
-        <Stat label="İletişim bilgisi bulunan" value={m.with_contact} href="/businesses?has_contact=true" />
-        <Stat label="Yüksek İSG potansiyeli" value={m.high_isg} href="/businesses?isg_min=60" hint="Puan ≥ 60" />
-        <Stat label="Yüksek yazılım potansiyeli" value={m.high_software} href="/businesses?software_min=60" hint="Puan ≥ 60" />
-        <Stat label="Henüz iletişime geçilmemiş" value={m.not_contacted} href="/businesses?sales_status=yeni&sales_status=arastiriliyor&sales_status=iletisime_hazir" />
-        <Stat label="Teklif verilen" value={m.quoted} href="/businesses?stage=teklif_gonderildi" />
-        <Stat label="Kazanılan müşteri" value={m.won} tone="good" href="/businesses?stage=kazanildi" />
-        <Stat label="Toplam aktif kayıt" value={m.total_active} href="/businesses" />
-      </div>
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
+          <span className="flex items-center gap-1.5 text-sm text-slate-600">
+            <MapPin size={15} className="text-brand-600" />
+            {location
+              ? `Seçili: ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`
+              : "Konum seçmek için haritaya tıklayın"}
+          </span>
+          <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
+            Yarıçap
+            <select value={radius} onChange={(e) => setRadius(Number(e.target.value))}
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none">
+              {RADIUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={handleScan} disabled={!location || scanning || configured === false}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:bg-slate-300">
+            {scanning && <Loader2 size={15} className="animate-spin" />}
+            {scanning ? "Taranıyor…" : "Tara"}
+          </button>
+        </div>
+        <div className="h-[420px] p-3">
+          <MapPicker value={location} radius={radius} onPick={setLocation} />
+        </div>
+      </section>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Son 14 gün tarama kapsamı" className="lg:col-span-2">
-          <div className="flex flex-wrap gap-1.5">
-            {data.coverage.map((c: Coverage) => (
-              <div key={c.date} className="flex w-12 flex-col items-center gap-1" title={`${fmtDate(c.date)} – ${COV[c.status].label}`}>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-md text-xs font-bold text-white ${COV[c.status].cls} ${c.weekend ? "opacity-60" : ""}`}>
-                  {c.new_businesses ?? "–"}
-                </div>
-                <span className="text-[10px] text-slate-500">{c.date.slice(8, 10)}.{c.date.slice(5, 7)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-600">
-            {Object.entries(COV).map(([k, v]) => (
-              <span key={k} className="inline-flex items-center gap-1"><span className={`h-2.5 w-2.5 rounded-sm ${v.cls}`} />{v.label}</span>
-            ))}
-            <span>· Kutudaki sayı: o gün kaynaklardan tespit edilen yeni kuruluş. "–" = tarama yok.</span>
-          </div>
-        </Card>
-        <Card title="Veri kaynakları">
-          <ul className="space-y-2 text-sm">
-            {data.sources.map((s: any) => (
-              <li key={s.key} className="flex items-start justify-between gap-2">
-                <span className="text-slate-700">{s.name}</span>
-                <Badge tone={s.enabled ? HEALTH[s.health]?.tone : "slate"}>{s.enabled ? HEALTH[s.health]?.label : "Kapalı"}</Badge>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
+      {error && (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Öncelikli adaylar (henüz görüşülmemiş)" className="lg:col-span-2"
-          actions={<Link href="/businesses" className="text-sm text-brand-600">Tümü →</Link>}>
-          {data.top_leads.length === 0 ? <p className="text-sm text-slate-500">Kayıt yok.</p> : (
-            <Table head={["İşletme", "İlçe", "Tarih", "İSG", "Yazılım", "Öncelik"]}>
-              {data.top_leads.map((b: any) => (
-                <tr key={b.id} className="hover:bg-slate-50">
-                  <Td><Link className="font-medium text-brand-700 hover:underline" href={`/businesses/${b.id}`}>{b.trade_name}</Link></Td>
-                  <Td>{b.district || "—"}</Td>
-                  <Td>{fmtDate(b.establishment_date)}</Td>
-                  <Td><Score value={b.isg_score} /></Td>
-                  <Td><Score value={b.software_score} /></Td>
-                  <Td><Badge tone={b.priority === "A" ? "green" : b.priority === "B" ? "amber" : "slate"}>{b.priority || "—"}</Badge></Td>
-                </tr>
-              ))}
-            </Table>
-          )}
-        </Card>
-        <Card title="Satış hunisi">
-          {data.funnel.map((f: any) => (
-            <div key={f.service_line} className="mb-4">
-              <div className="mb-1 text-xs font-semibold uppercase text-slate-500">{f.service_line === "isg" ? "İSG" : "Yazılım"}</div>
-              {f.stages.map((s: any) => (
-                <div key={s.stage} className="flex justify-between border-b border-slate-50 py-0.5 text-sm">
-                  <span className="text-slate-600">{s.label}</span><span className="font-semibold tabular-nums">{s.count}</span>
-                </div>
-              ))}
+      {result && (
+        <section className="mt-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-slate-700">
+              {result.stats.found} işletme tarandı → {result.stats.shown} aday listelendi:
+            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+              {result.stats.without_website} sitesiz
+            </span>
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+              {result.stats.outdated_website} eski siteli
+            </span>
+            <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+              {result.stats.unreachable_website} ulaşılamayan
+            </span>
+            <span className="text-xs text-slate-400">
+              ({result.stats.filtered_modern} modern siteli elendi)
+            </span>
+          </div>
+          {result.warnings.length > 0 && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              {result.warnings.map((w, i) => <div key={i}>{w}</div>)}
             </div>
-          ))}
-        </Card>
-      </div>
-    </div>
+          )}
+          {result.businesses.length
+            ? <ResultsTable businesses={result.businesses}
+                            onEmail={(b) => setModal({ kind: "email", business: b })}
+                            onSms={(b) => setModal({ kind: "sms", business: b })} />
+            : <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 shadow-sm">
+                Bu bölgede sitesiz/eski siteli işletme bulunamadı.
+              </div>}
+        </section>
+      )}
+
+      {modal && (
+        <MessageModal kind={modal.kind} business={modal.business} onClose={() => setModal(null)} />
+      )}
+    </main>
   );
 }

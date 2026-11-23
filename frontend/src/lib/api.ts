@@ -1,109 +1,57 @@
-export const TOKEN_KEY = "abr_token";
+export type WebsiteStatus = "yok" | "eski" | "erisilemedi";
 
-export class ApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
+export interface Business {
+  place_id: string;
+  name: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  phone: string;
+  website: string | null;
+  website_status: WebsiteStatus;
+  website_notes: string[];
 }
 
-function token(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
+export interface ScanStats {
+  found: number;
+  shown: number;
+  without_website: number;
+  outdated_website: number;
+  unreachable_website: number;
+  filtered_modern: number;
 }
 
-export function setToken(t: string | null) {
-  try {
-    if (t) window.localStorage.setItem(TOKEN_KEY, t);
-    else window.localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    /* depolama erişilemez */
-  }
+export interface ScanResponse {
+  businesses: Business[];
+  stats: ScanStats;
+  warnings: string[];
 }
 
-async function handle(res: Response) {
-  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-    setToken(null);
-    window.location.href = "/login";
-  }
+export interface AppConfig {
+  google_places_configured: boolean;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
   if (!res.ok) {
-    let msg = `Hata (${res.status})`;
+    let detail = `HTTP ${res.status}`;
     try {
-      const j = await res.json();
-      if (typeof j.detail === "string") msg = j.detail;
-      else if (Array.isArray(j.detail)) msg = j.detail.map((d: { msg: string }) => d.msg).join("; ");
-    } catch {
-      /* yanıt JSON değil */
-    }
-    throw new ApiError(res.status, msg);
+      const data = await res.json();
+      if (typeof data?.detail === "string") detail = data.detail;
+    } catch { /* gövde yok */ }
+    throw new Error(detail);
   }
-  const ct = res.headers.get("content-type") || "";
-  return ct.includes("application/json") ? res.json() : res;
+  return res.json() as Promise<T>;
 }
 
-export async function api<T = any>(path: string, opts: RequestInit & { json?: unknown } = {}): Promise<T> {
-  const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
-  const t = token();
-  if (t) headers["Authorization"] = `Bearer ${t}`;
-  let body = opts.body;
-  if (opts.json !== undefined) {
-    headers["Content-Type"] = "application/json";
-    body = JSON.stringify(opts.json);
-  }
-  const res = await fetch(`/api${path}`, { ...opts, headers, body });
-  return handle(res);
+export function getConfig(): Promise<AppConfig> {
+  return request<AppConfig>("/api/config");
 }
 
-export async function download(path: string, fallbackName: string) {
-  const t = token();
-  const res = await fetch(`/api${path}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} });
-  if (!res.ok) {
-    await handle(res);
-    return;
-  }
-  const blob = await res.blob();
-  const cd = res.headers.get("content-disposition") || "";
-  const m = cd.match(/filename="?([^";]+)"?/);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = m ? m[1] : fallbackName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-export function qs(params: Record<string, unknown>): string {
-  const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null || v === "") continue;
-    if (Array.isArray(v)) v.forEach((x) => sp.append(k, String(x)));
-    else sp.set(k, String(v));
-  }
-  const s = sp.toString();
-  return s ? `?${s}` : "";
-}
-
-export function fmtDate(v?: string | null): string {
-  if (!v) return "—";
-  const d = new Date(v.length === 10 ? v + "T00:00:00" : v);
-  if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString("tr-TR");
-}
-
-export function fmtDateTime(v?: string | null): string {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? v : d.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
-}
-
-export function fmtMoney(v?: number | null, cur = "TRY"): string {
-  if (v === null || v === undefined) return "—";
-  return new Intl.NumberFormat("tr-TR", { style: "currency", currency: cur, maximumFractionDigits: 2 }).format(v);
+export function scanArea(lat: number, lng: number, radius_m: number): Promise<ScanResponse> {
+  return request<ScanResponse>("/api/scan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lat, lng, radius_m }),
+  });
 }
