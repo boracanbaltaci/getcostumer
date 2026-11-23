@@ -149,6 +149,18 @@ def test_hizli_mesajlar_ekle_listele_sil(client):
     assert client.delete(f"/api/quick-messages/{mid}").status_code == 404
 
 
+def test_hizli_mesaj_duzenle(client):
+    _login(client)
+    mid = client.post("/api/quick-messages", json={"text": "eski"}).json()["id"]
+
+    assert client.put(f"/api/quick-messages/{mid}",
+                      json={"text": "  yeni metin  "}).status_code == 204
+    msgs = client.get("/api/quick-messages").json()
+    assert msgs[0]["text"] == "yeni metin"
+
+    assert client.put("/api/quick-messages/yok", json={"text": "x"}).status_code == 404
+
+
 def test_hizli_mesajlar_kullanici_bazli(client):
     _login(client)
     mid = client.post("/api/quick-messages", json={"text": "taslak"}).json()["id"]

@@ -162,6 +162,14 @@ export function addQuickMessageApi(text: string): Promise<QuickMessage> {
   });
 }
 
+export async function updateQuickMessageApi(id: string, text: string): Promise<void> {
+  await request(`/api/quick-messages/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+}
+
 export async function deleteQuickMessageApi(id: string): Promise<void> {
   await request(`/api/quick-messages/${id}`, { method: "DELETE" });
 }

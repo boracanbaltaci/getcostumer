@@ -425,6 +425,15 @@ def add_quick_message(user_id: str, text: str) -> Dict[str, Any]:
     return msg
 
 
+def update_quick_message(user_id: str, msg_id: str, text: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE quick_messages SET text = ? WHERE id = ? AND user_id = ?",
+            (text.strip(), msg_id, user_id),
+        )
+    return cur.rowcount > 0
+
+
 def delete_quick_message(user_id: str, msg_id: str) -> bool:
     with _connect() as conn:
         cur = conn.execute(

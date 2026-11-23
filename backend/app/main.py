@@ -221,6 +221,13 @@ def add_quick_message(req: QuickMessageIn, user: dict = Depends(auth.get_current
     return store.add_quick_message(user["id"], req.text)
 
 
+@app.put("/api/quick-messages/{msg_id}", status_code=204)
+def update_quick_message(msg_id: str, req: QuickMessageIn,
+                         user: dict = Depends(auth.get_current_user)):
+    if not store.update_quick_message(user["id"], msg_id, req.text):
+        raise HTTPException(status_code=404, detail="Mesaj kaydı bulunamadı")
+
+
 @app.delete("/api/quick-messages/{msg_id}", status_code=204)
 def remove_quick_message(msg_id: str, user: dict = Depends(auth.get_current_user)):
     if not store.delete_quick_message(user["id"], msg_id):
