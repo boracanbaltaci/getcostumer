@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+node_modules/
+.next/
+data/inbox/*
+data/uploads/*
+!data/inbox/.gitkeep
+!data/uploads/.gitkeep
+.DS_Store
+*.tsbuildinfo
