@@ -12,8 +12,8 @@ services:
       DB_PATH: /data/scans.db
     volumes:
       - ./data:/data
-    ports:
-      - "127.0.0.1:8000:8000"
+    expose:
+      - "8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
       interval: 15s

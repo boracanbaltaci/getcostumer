@@ -70,8 +70,15 @@ Frontend `/api/*` isteklerini `next.config.js`'deki rewrite ile backend'e proxy'
 ## Docker ile
 
 ```bash
-docker compose up --build
+docker compose up -d --build   # frontend + backend tek komutla
 ```
+
+Arayüz: `http://localhost:${WEB_PORT:-3000}` (çakışırsa `.env`'de `WEB_PORT`
+değiştir). Backend host portu açmaz — frontend, `/api/*` isteklerini compose
+ağı içinden `backend:8000`'e proxy'ler. Veritabanı (SQLite) `./data` altında
+durur ve volume ile container'a bağlanır.
+
+Durdurmak: `docker compose down`.
 
 ## Google API anahtarı alma (adım adım)
 
