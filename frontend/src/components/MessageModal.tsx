@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import type { Business } from "@/lib/api";
+import { listQuickMessages, type Business, type QuickMessage } from "@/lib/api";
 
 export type MessageKind = "email" | "sms";
 
@@ -12,10 +12,12 @@ export default function MessageModal({ kind, business, onClose }: {
   onClose: () => void;
 }) {
   const [text, setText] = useState("");
+  const [quickMsgs, setQuickMsgs] = useState<QuickMessage[]>([]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
+    listQuickMessages().then(setQuickMsgs).catch(() => {});
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
@@ -39,6 +41,21 @@ export default function MessageModal({ kind, business, onClose }: {
           </button>
         </header>
         <div className="p-5">
+          {quickMsgs.length > 0 && (
+            <select value="" aria-label="Hızlı mesaj seç"
+                    onChange={(e) => {
+                      const m = quickMsgs.find((q) => q.id === e.target.value);
+                      if (m) setText(m.text);
+                    }}
+                    className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 focus:border-brand-500 focus:outline-none">
+              <option value="" disabled>Hızlı mesaj seç…</option>
+              {quickMsgs.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.text.length > 70 ? `${q.text.slice(0, 70)}…` : q.text}
+                </option>
+              ))}
+            </select>
+          )}
           <textarea
             autoFocus
             rows={6}

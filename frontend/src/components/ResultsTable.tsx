@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, MessageSquare } from "lucide-react";
+import { Heart, Mail, MessageSquare } from "lucide-react";
 import type { Business } from "@/lib/api";
 
 const STATUS_BADGE: Record<Business["website_status"], { text: string; cls: string }> = {
@@ -31,10 +31,12 @@ const HEAD = (
   </thead>
 );
 
-export default function ResultsTable({ businesses, onEmail, onSms }: {
+export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, onToggleFavorite }: {
   businesses: Business[];
   onEmail: (b: Business) => void;
   onSms: (b: Business) => void;
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (b: Business) => void;
 }) {
   const [filter, setFilter] = useState<StatusFilter>("all");
   if (!businesses.length) return null;
@@ -96,6 +98,16 @@ export default function ResultsTable({ businesses, onEmail, onSms }: {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1.5">
+                      {onToggleFavorite && (
+                        <button type="button" title="Favori" aria-label={`${b.name} favori`}
+                                onClick={() => onToggleFavorite(b)}
+                                className="rounded-lg border border-slate-200 p-2 transition hover:border-red-300">
+                          <Heart size={16} fill={favoriteIds?.has(b.place_id) ? "currentColor" : "none"}
+                                 className={favoriteIds?.has(b.place_id)
+                                   ? "text-red-500"
+                                   : "text-slate-400 transition hover:text-red-400"} />
+                        </button>
+                      )}
                       <button type="button" title="E-posta gönder" aria-label={`${b.name} için e-posta gönder`}
                               onClick={() => onEmail(b)}
                               className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:border-brand-500 hover:text-brand-600">

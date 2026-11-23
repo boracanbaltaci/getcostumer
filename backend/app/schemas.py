@@ -53,8 +53,43 @@ class ScanSummaryOut(BaseModel):
     lng: float
     radius_m: int
     stats: ScanStats
+    is_favorite: bool = False
 
 
 class ScanRecordOut(ScanSummaryOut):
     """Tek tarama kaydı — işletme listesi dahil."""
     businesses: list[BusinessOut] = Field(default_factory=list)
+
+
+class FavoriteBusinessIn(BaseModel):
+    """İşletme favorileme gövdesi — snapshot + geldiği tarama (opsiyonel)."""
+    business: BusinessOut
+    scan_id: Optional[str] = None
+
+
+class BusinessFavoriteOut(BaseModel):
+    place_id: str
+    added_at: str
+    business: BusinessOut
+
+
+class QuickMessageIn(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+
+
+class QuickMessageOut(BaseModel):
+    id: str
+    text: str
+    created_at: str
+
+
+# ---- Auth ----
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=80)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class UserOut(BaseModel):
+    username: str

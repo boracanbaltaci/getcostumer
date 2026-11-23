@@ -7,13 +7,19 @@ Türkçe olabilir; **kullanıcıyla tüm iletişim Türkçe'dir.**
 
 - **Backend:** Python, FastAPI, Pydantic 2 — `backend/app/`
   - `main.py` — HTTP katmanı: `GET /api/health`, `GET /api/config`, `POST /api/scan`,
-    `GET/DELETE /api/scans[/{id}]`
+    `GET/DELETE /api/scans[/{id}]`, `POST /api/auth/login`, `POST /api/auth/logout`,
+    `GET /api/auth/me`, `GET/PUT/DELETE /api/favorites[/{scan_id}]` (tarama favorileri),
+    `GET/PUT/DELETE /api/business-favorites[/{place_id}]` (işletme favorileri),
+    `GET/POST/DELETE /api/quick-messages[/{id}]` (hızlı mesaj şablonları)
   - `services/places.py` — Google Places API (New) Nearby Search istemcisi
   - `services/sitescan.py` — web sitesi "eski görünümlü mü?" sezgisel analizi
-  - `services/store.py` — tarama geçmişi (SQLite, `data/scans.db`)
+  - `services/store.py` — tarama geçmişi + kullanıcılar/oturumlar/favoriler (SQLite)
+  - `services/auth.py` — pbkdf2 parola doğrulama, oturum cookie, `get_current_user`
 - **Frontend:** Next.js (App Router), TypeScript, Tailwind, Leaflet (react-leaflet) —
-  `frontend/src/`; tek sayfa `app/page.tsx`, bileşenler `components/`
-- **Veritabanı:** SQLite (`data/scans.db`) — yalnızca tarama geçmişi; `*.db` gitignore'da.
+  `frontend/src/`; tek sayfa `app/page.tsx`, bileşenler `components/` (giriş ekranı
+  dahil)
+- **Veritabanı:** SQLite (`data/scans.db`) — taramalar, favoriler, kullanıcılar,
+  oturumlar; `*.db` gitignore'da.
 - Frontend `/api/*` isteklerini `next.config.js` rewrite'ı ile backend'e proxy'ler.
 
 ## Temel ilkeler
@@ -37,6 +43,9 @@ Türkçe olabilir; **kullanıcıyla tüm iletişim Türkçe'dir.**
    sunucuda kullanılır; frontend'e/koda sır yazılmaz. `.env` sürüm kontrolüne girmez.
 5. **Places alan maskesi sabittir:** yeni alan gerekirse `FIELD_MASK`'e eklenir;
    gereksiz alan istenmez (Google ücretlendirmesi alan bazlıdır).
+6. **Kullanıcı izolasyonu:** taramalar ve favoriler `user_id`'ye bağlıdır; her sorgu
+   oturum sahibiyle filtrelenir. `/api/health`, `/api/config` ve `/api/auth/*` dışındaki
+   uçlar `Depends(auth.get_current_user)` ister.
 
 ## Görev sonu (Definition of Done)
 

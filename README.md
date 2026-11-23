@@ -16,19 +16,38 @@ veya **eski görünümlü web sitesi** olan işletmeleri bulan tek ekranlı uygu
    - `Ulaşılamadı` — site açılmıyor / park sayfası
 5. Aksiyon sütunundaki **e-posta** ve **SMS** ikonları taslak mesaj modal'ı açar
    (gönderim henüz bağlı değildir; metin yazıp Gönder demek modal'ı kapatır).
+   Modal'ın üstündeki açılır listeden **Hızlı Mesajlar** ekranında kayıtlı
+   şablonlar seçilip metni doldurur.
 
 Her başarılı tarama sonucuyla birlikte **SQLite**'a (`data/scans.db`) kaydedilir;
-"Önceki Taramalar" ekranından geri açılabilir.
+"Önceki Taramalar" ekranından geri açılabilir. **Kalp** ikonu iki yerde vardır:
+tarama satırında taramayı, işletme tablosu satırlarında işletmeyi favoriler.
+**Favoriler** ekranı iki bölümdür: "Favori İşletmeler" tablosu + "Favori Taramalar"
+listesi.
+
+## Giriş & kullanıcılar
+
+Uygulama giriş ister. İlk açılışta hiç kullanıcı yoksa **admin / admin** hesabı
+otomatik oluşur (kullanıcı adı + şifre yeterlidir). Oturum, HttpOnly cookie ile
+taşınan bir oturum token'ıdır (`SESSION_TTL_DAYS` gün geçerli).
+
+- Taramalar ve favoriler **kullanıcıya bağlıdır** — kullanıcılar birbirlerinin
+  kayıtlarını göremez.
+- Parolalar PBKDF2-HMAC-SHA256 ile hash'lenerek `data/scans.db`'de tutulur;
+  yeni kullanıcı eklemek için `users` tablosuna `services/auth.py`'deki
+  `hash_password` ile satır eklenebilir.
 
 ## Teknoloji
 
 - **Backend:** Python + FastAPI — `backend/app/` (`services/places.py` Google istemcisi,
-  `services/sitescan.py` site analizi, `services/store.py` geçmiş kayıtları)
+  `services/sitescan.py` site analizi, `services/store.py` tarama/favori/kullanıcı
+  kayıtları, `services/auth.py` giriş + oturum)
 - **Frontend:** Next.js + TypeScript + Tailwind + Leaflet (react-leaflet) — `frontend/src/`,
-  iki ekran: Tarama + Önceki Taramalar
+  ekranlar: Giriş, Tarama, Önceki Taramalar, Favoriler, Hızlı Mesajlar
 - **Harita:** Leaflet + OpenStreetMap (anahtarsız)
 - **Veri:** Google Places API (New) — anahtar gerekli
-- **Depolama:** SQLite (`data/scans.db`) — tarama geçmişi; ek kurulum gerekmez
+- **Depolama:** SQLite (`data/scans.db`) — tarama geçmişi, kullanıcılar, oturumlar,
+  favoriler; ek kurulum gerekmez
 
 ## Kurulum (yerel)
 
@@ -90,13 +109,14 @@ Bkz. `.env.example`. Önemlileri:
 | `WEBSITE_CHECK_LIMIT` | Site analizi yapılacak en fazla işletme (vars. 60) |
 | `CORS_ORIGINS` | Backend'e doğrudan erişecek kökenler |
 | `DB_PATH` | Geçmiş SQLite dosyası (vars. `data/scans.db`) |
+| `SESSION_TTL_DAYS` | Oturum geçerliliği, gün (vars. 30) |
 | `WEB_PORT` | Docker'da frontend portu (vars. 3000) |
 
 ## Testler
 
 ```bash
 cd backend
-pytest tests/ -q      # site-analiz birim testleri (ağ çağrısı yok)
+pytest tests/ -q      # site-analiz + auth/izolasyon/favori testleri (ağ çağrısı yok)
 
 cd frontend
 npm run typecheck     # TypeScript denetimi

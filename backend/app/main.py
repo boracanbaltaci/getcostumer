@@ -5,13 +5,14 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.schemas import (BusinessOut, ConfigOut, ScanRecordOut, ScanRequest,
-                         ScanResponse, ScanStats, ScanSummaryOut)
-from app.services import places, sitescan, store
+from app.schemas import (BusinessFavoriteOut, BusinessOut, ConfigOut, FavoriteBusinessIn,
+                         LoginRequest, QuickMessageIn, QuickMessageOut, ScanRecordOut,
+                         ScanRequest, ScanResponse, ScanStats, ScanSummaryOut, UserOut)
+from app.services import auth, places, sitescan, store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -20,6 +21,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     store.init_db()
+    # Kullanıcı yoksa admin/admin aç; eski sahipsiz taramaları bu hesaba bağla.
+    store.claim_unowned_scans(auth.ensure_admin()["id"])
     yield
 
 
@@ -39,8 +42,37 @@ def get_config():
     return ConfigOut(google_places_configured=settings.google_configured)
 
 
+# ---- Auth ----
+
+
+@app.post("/api/auth/login", response_model=UserOut)
+def login(req: LoginRequest, response: Response):
+    user = auth.authenticate(req.username, req.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Kullanıcı adı veya şifre hatalı.")
+    response.set_cookie(
+        auth.SESSION_COOKIE, auth.open_session(user["id"]),
+        path="/", httponly=True, samesite="lax",
+        max_age=settings.SESSION_TTL_DAYS * 86400,
+    )
+    return UserOut(username=user["username"])
+
+
+@app.post("/api/auth/logout", status_code=204)
+def logout(request: Request, response: Response):
+    token = request.cookies.get(auth.SESSION_COOKIE)
+    if token:
+        auth.close_session(token)
+    response.delete_cookie(auth.SESSION_COOKIE, path="/")
+
+
+@app.get("/api/auth/me", response_model=UserOut)
+def me(user: dict = Depends(auth.get_current_user)):
+    return UserOut(username=user["username"])
+
+
 @app.post("/api/scan", response_model=ScanResponse)
-def scan(req: ScanRequest):
+def scan(req: ScanRequest, user: dict = Depends(auth.get_current_user)):
     if not settings.google_configured:
         raise HTTPException(
             status_code=503,
@@ -100,8 +132,8 @@ def scan(req: ScanRequest):
     stats.shown = len(businesses)
 
     try:  # geçmiş kaydı: yazma hatası tarama sonucunu etkilemesin
-        store.insert_scan(req.lat, req.lng, req.radius_m, stats.model_dump(),
-                          [b.model_dump() for b in businesses])
+        store.insert_scan(user["id"], req.lat, req.lng, req.radius_m,
+                          stats.model_dump(), [b.model_dump() for b in businesses])
     except Exception as exc:
         logger.warning("Tarama kaydı yazılamadı: %s", exc)
         warnings.append("Tarama geçmişe kaydedilemedi")
@@ -110,19 +142,81 @@ def scan(req: ScanRequest):
 
 
 @app.get("/api/scans", response_model=list[ScanSummaryOut])
-def list_scans():
-    return store.list_scans()
+def list_scans(user: dict = Depends(auth.get_current_user)):
+    return store.list_scans(user["id"])
 
 
 @app.get("/api/scans/{scan_id}", response_model=ScanRecordOut)
-def get_scan(scan_id: str):
-    rec = store.get_scan(scan_id)
+def get_scan(scan_id: str, user: dict = Depends(auth.get_current_user)):
+    rec = store.get_scan(scan_id, user["id"])
     if rec is None:
         raise HTTPException(status_code=404, detail="Tarama kaydı bulunamadı")
     return rec
 
 
 @app.delete("/api/scans/{scan_id}", status_code=204)
-def remove_scan(scan_id: str):
-    if not store.delete_scan(scan_id):
+def remove_scan(scan_id: str, user: dict = Depends(auth.get_current_user)):
+    if not store.delete_scan(scan_id, user["id"]):
         raise HTTPException(status_code=404, detail="Tarama kaydı bulunamadı")
+
+
+# ---- Favoriler ----
+
+
+@app.get("/api/favorites", response_model=list[ScanSummaryOut])
+def list_favorites(user: dict = Depends(auth.get_current_user)):
+    return store.list_favorites(user["id"])
+
+
+@app.put("/api/favorites/{scan_id}", status_code=204)
+def add_favorite(scan_id: str, user: dict = Depends(auth.get_current_user)):
+    if not store.add_favorite(user["id"], scan_id):
+        raise HTTPException(status_code=404, detail="Tarama kaydı bulunamadı")
+
+
+@app.delete("/api/favorites/{scan_id}", status_code=204)
+def remove_favorite(scan_id: str, user: dict = Depends(auth.get_current_user)):
+    if not store.remove_favorite(user["id"], scan_id):
+        raise HTTPException(status_code=404, detail="Tarama kaydı bulunamadı")
+
+
+# ---- İşletme favorileri ----
+
+
+@app.get("/api/business-favorites", response_model=list[BusinessFavoriteOut])
+def list_business_favorites(user: dict = Depends(auth.get_current_user)):
+    return store.list_business_favorites(user["id"])
+
+
+@app.put("/api/business-favorites/{place_id}", status_code=204)
+def add_business_favorite(place_id: str, req: FavoriteBusinessIn,
+                          user: dict = Depends(auth.get_current_user)):
+    if place_id != req.business.place_id:
+        raise HTTPException(status_code=400, detail="place_id uyuşmuyor")
+    store.add_business_favorite(user["id"], place_id,
+                                req.business.model_dump(), req.scan_id or "")
+
+
+@app.delete("/api/business-favorites/{place_id}", status_code=204)
+def remove_business_favorite(place_id: str, user: dict = Depends(auth.get_current_user)):
+    if not store.remove_business_favorite(user["id"], place_id):
+        raise HTTPException(status_code=404, detail="Favori kaydı bulunamadı")
+
+
+# ---- Hızlı mesajlar ----
+
+
+@app.get("/api/quick-messages", response_model=list[QuickMessageOut])
+def list_quick_messages(user: dict = Depends(auth.get_current_user)):
+    return store.list_quick_messages(user["id"])
+
+
+@app.post("/api/quick-messages", status_code=201, response_model=QuickMessageOut)
+def add_quick_message(req: QuickMessageIn, user: dict = Depends(auth.get_current_user)):
+    return store.add_quick_message(user["id"], req.text)
+
+
+@app.delete("/api/quick-messages/{msg_id}", status_code=204)
+def remove_quick_message(msg_id: str, user: dict = Depends(auth.get_current_user)):
+    if not store.delete_quick_message(user["id"], msg_id):
+        raise HTTPException(status_code=404, detail="Mesaj kaydı bulunamadı")

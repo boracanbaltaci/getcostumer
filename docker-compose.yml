@@ -1,7 +1,7 @@
 name: isletme-radari
 
-# Tek ekranlı uygulama: backend (FastAPI) + frontend (Next.js). Veritabanı yok;
-# tarama sonuçları oturum içinde gösterilir, saklanmaz.
+# Tek ekranlı uygulama: backend (FastAPI) + frontend (Next.js). SQLite
+# (taramalar, kullanıcılar, oturumlar, favoriler) ./data altında tutulur.
 
 services:
   backend:

@@ -1,13 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, MapPin } from "lucide-react";
+import FavoritesView from "@/components/FavoritesView";
 import HistoryView from "@/components/HistoryView";
+import LoginScreen from "@/components/LoginScreen";
+import MessagesView from "@/components/MessagesView";
 import MessageModal, { type MessageKind } from "@/components/MessageModal";
 import ResultsTable, { ResultsTableSkeleton } from "@/components/ResultsTable";
 import Sidebar, { type View } from "@/components/Sidebar";
-import { getConfig, scanArea, type Business, type ScanResponse } from "@/lib/api";
+import { addBusinessFavoriteApi, getConfig, listBusinessFavorites, logout, me,
+         removeBusinessFavoriteApi, scanArea,
+         type Business, type BusinessFavorite, type ScanResponse } from "@/lib/api";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
@@ -23,6 +28,8 @@ const RADIUS_OPTIONS = [
 
 export default function Home() {
   const [view, setView] = useState<View>("scan");
+  const [user, setUser] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [radius, setRadius] = useState(1000);
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -31,12 +38,28 @@ export default function Home() {
   const [lastScanAt, setLastScanAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
+  const [bizFavorites, setBizFavorites] = useState<BusinessFavorite[]>([]);
+  const favBizIds = useMemo(() => new Set(bizFavorites.map((f) => f.place_id)), [bizFavorites]);
 
   useEffect(() => {
+    me()
+      .then((u) => setUser(u.username))
+      .catch(() => setUser(null))
+      .finally(() => setAuthReady(true));
+    const onExpired = () => setUser(null);
+    window.addEventListener("auth:expired", onExpired);
+    return () => window.removeEventListener("auth:expired", onExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
     getConfig()
       .then((c) => setConfigured(c.google_places_configured))
       .catch(() => setConfigured(null));
-  }, []);
+    listBusinessFavorites()
+      .then(setBizFavorites)
+      .catch(() => setBizFavorites([]));
+  }, [user]);
 
   async function handleScan() {
     if (!location || scanning) return;
@@ -54,11 +77,57 @@ export default function Home() {
     }
   }
 
+  async function toggleBizFavorite(b: Business) {
+    try {
+      if (favBizIds.has(b.place_id)) {
+        await removeBusinessFavoriteApi(b.place_id);
+        setBizFavorites((prev) => prev.filter((f) => f.place_id !== b.place_id));
+      } else {
+        await addBusinessFavoriteApi(b);
+        setBizFavorites((prev) => [
+          { place_id: b.place_id, added_at: new Date().toISOString(), business: b },
+          ...prev,
+        ]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Favori güncellenemedi");
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+    } finally {
+      window.location.reload();
+    }
+  }
+
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">
+        <Loader2 size={16} className="mr-2 animate-spin" /> Yükleniyor…
+      </div>
+    );
+  }
+  if (!user) {
+    // Giriş/çıkışta tam yeniden yükleme: oturumlar arası eski state kalmasın.
+    return <LoginScreen onLogin={() => window.location.reload()} />;
+  }
+
   return (
     <div className="min-h-screen lg:flex">
-      <Sidebar view={view} onNavigate={setView} />
+      <Sidebar view={view} onNavigate={setView} username={user} onLogout={handleLogout} />
       <main className="min-w-0 flex-1 p-4 lg:p-6">
-        {view === "history" && <HistoryView />}
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+        {view === "history" && <HistoryView favoriteIds={favBizIds} onToggleFavorite={toggleBizFavorite} />}
+        {view === "favorites" && (
+          <FavoritesView favorites={bizFavorites} favoriteIds={favBizIds} onToggleFavorite={toggleBizFavorite} />
+        )}
+        {view === "messages" && <MessagesView />}
         {view === "scan" && (
           <>
             {configured === false && (
@@ -95,12 +164,6 @@ export default function Home() {
                 <MapPicker value={location} radius={radius} onPick={setLocation} />
               </div>
             </section>
-
-            {error && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
 
             {scanning && (
               <section className="mt-4">
@@ -141,7 +204,9 @@ export default function Home() {
                 {result.businesses.length
                   ? <ResultsTable businesses={result.businesses}
                                   onEmail={(b) => setModal({ kind: "email", business: b })}
-                                  onSms={(b) => setModal({ kind: "sms", business: b })} />
+                                  onSms={(b) => setModal({ kind: "sms", business: b })}
+                                  favoriteIds={favBizIds}
+                                  onToggleFavorite={toggleBizFavorite} />
                   : <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 shadow-sm">
                       Bu bölgede sitesiz/eski siteli işletme bulunamadı.
                     </div>}

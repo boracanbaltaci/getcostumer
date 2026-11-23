@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Tarama geçmişinin tutulduğu SQLite dosyası (boş = <proje kökü>/data/scans.db).
     DB_PATH: str = ""
 
+    # Oturum cookie'si geçerlilik süresi (gün).
+    SESSION_TTL_DAYS: int = 30
+
     @property
     def db_path(self) -> str:
         return self.DB_PATH or os.path.join(_ROOT, "data", "scans.db")

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Clock, Loader2, MapPin, Trash2 } from "lucide-react";
+import { ChevronDown, Clock, Heart, Loader2, MapPin, Trash2 } from "lucide-react";
 import MessageModal, { type MessageKind } from "@/components/MessageModal";
 import ResultsTable from "@/components/ResultsTable";
-import { deleteScanApi, getScan, listScans, type Business, type ScanRecord, type ScanSummary } from "@/lib/api";
+import { addFavoriteApi, deleteScanApi, getScan, listFavorites, listScans, removeFavoriteApi, type Business, type ScanRecord, type ScanSummary } from "@/lib/api";
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleString("tr-TR", {
@@ -12,7 +12,11 @@ function fmtTime(iso: string): string {
   });
 }
 
-export default function HistoryView() {
+export default function HistoryView({ favoritesOnly = false, favoriteIds, onToggleFavorite }: {
+  favoritesOnly?: boolean;
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (b: Business) => void;
+}) {
   const [scans, setScans] = useState<ScanSummary[] | null>(null);
   const [details, setDetails] = useState<Record<string, ScanRecord>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -21,10 +25,10 @@ export default function HistoryView() {
   const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
 
   useEffect(() => {
-    listScans()
+    (favoritesOnly ? listFavorites() : listScans())
       .then(setScans)
       .catch((e) => setError(e instanceof Error ? e.message : "Geçmiş yüklenemedi"));
-  }, []);
+  }, [favoritesOnly]);
 
   async function toggle(id: string) {
     setExpanded((prev) => {
@@ -48,11 +52,25 @@ export default function HistoryView() {
   async function remove(id: string) {
     try {
       await deleteScanApi(id);
-      setScans((prev) => (prev ?? []).filter((s) => s.id !== id));
-      setDetails((prev) => { const n = { ...prev }; delete n[id]; return n; });
-      setExpanded((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      dropRow(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kayıt silinemedi");
+    }
+  }
+
+  function dropRow(id: string) {
+    setScans((prev) => (prev ?? []).filter((s) => s.id !== id));
+    setDetails((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    setExpanded((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }
+
+  async function toggleFav(s: ScanSummary) {
+    try {
+      if (s.is_favorite) await removeFavoriteApi(s.id); else await addFavoriteApi(s.id);
+      if (favoritesOnly && s.is_favorite) dropRow(s.id);
+      else setScans((prev) => (prev ?? []).map((x) => (x.id === s.id ? { ...x, is_favorite: !s.is_favorite } : x)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Favori güncellenemedi");
     }
   }
 
@@ -65,7 +83,9 @@ export default function HistoryView() {
   if (!scans.length) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
-        Henüz tarama kaydı yok. Tarama ekranından konum seçip Tara&apos;ya basın.
+        {favoritesOnly
+          ? "Henüz favori tarama yok. Önceki Taramalar'da kalp ikonuna basarak ekleyin."
+          : "Henüz tarama kaydı yok. Tarama ekranından konum seçip Tara'ya basın."}
       </div>
     );
   }
@@ -74,7 +94,9 @@ export default function HistoryView() {
     <>
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-800">Önceki Taramalar ({scans.length})</h2>
+          <h2 className="text-sm font-semibold text-slate-800">
+            {favoritesOnly ? "Favori Taramalar" : "Önceki Taramalar"} ({scans.length})
+          </h2>
         </header>
         <ul className="divide-y divide-slate-100">
           {scans.map((s) => {
@@ -97,8 +119,14 @@ export default function HistoryView() {
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">{s.stats.outdated_website} eski</span>
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-700">{s.stats.unreachable_website} ulaşılamadı</span>
                   </span>
-                  <span className="ml-auto" onClick={(e) => { e.stopPropagation(); remove(s.id); }}>
-                    <Trash2 size={15} className="text-slate-300 transition hover:text-red-500" aria-label="Kaydı sil" />
+                  <span className="ml-auto flex items-center gap-2">
+                    <span onClick={(e) => { e.stopPropagation(); toggleFav(s); }}>
+                      <Heart size={15} fill={s.is_favorite ? "currentColor" : "none"} aria-label="Favori"
+                             className={s.is_favorite ? "text-red-500" : "text-slate-300 transition hover:text-red-400"} />
+                    </span>
+                    <span onClick={(e) => { e.stopPropagation(); remove(s.id); }}>
+                      <Trash2 size={15} className="text-slate-300 transition hover:text-red-500" aria-label="Kaydı sil" />
+                    </span>
                   </span>
                 </button>
                 {open && (
@@ -111,7 +139,9 @@ export default function HistoryView() {
                     {rec && !loadingIds.has(s.id) && (
                       <ResultsTable businesses={rec.businesses}
                                     onEmail={(b) => setModal({ kind: "email", business: b })}
-                                    onSms={(b) => setModal({ kind: "sms", business: b })} />
+                                    onSms={(b) => setModal({ kind: "sms", business: b })}
+                                    favoriteIds={favoriteIds}
+                                    onToggleFavorite={onToggleFavorite} />
                     )}
                   </div>
                 )}
