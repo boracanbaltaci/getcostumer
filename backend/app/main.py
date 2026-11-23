@@ -3,18 +3,27 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.schemas import BusinessOut, ConfigOut, ScanRequest, ScanResponse, ScanStats
-from app.services import places, sitescan
+from app.schemas import (BusinessOut, ConfigOut, ScanRecordOut, ScanRequest,
+                         ScanResponse, ScanStats, ScanSummaryOut)
+from app.services import places, sitescan, store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="İşletme Radarı API", version="1.0.0",
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    store.init_db()
+    yield
+
+
+app = FastAPI(title="İşletme Radarı API", version="1.0.0", lifespan=lifespan,
               docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
                    allow_methods=["*"], allow_headers=["*"])
@@ -89,4 +98,31 @@ def scan(req: ScanRequest):
     order = {"yok": 0, "erisilemedi": 1, "eski": 2}
     businesses = sorted(results.values(), key=lambda b: (order[b.website_status], b.name.lower()))
     stats.shown = len(businesses)
+
+    try:  # geçmiş kaydı: yazma hatası tarama sonucunu etkilemesin
+        store.insert_scan(req.lat, req.lng, req.radius_m, stats.model_dump(),
+                          [b.model_dump() for b in businesses])
+    except Exception as exc:
+        logger.warning("Tarama kaydı yazılamadı: %s", exc)
+        warnings.append("Tarama geçmişe kaydedilemedi")
+
     return ScanResponse(businesses=businesses, stats=stats, warnings=warnings)
+
+
+@app.get("/api/scans", response_model=list[ScanSummaryOut])
+def list_scans():
+    return store.list_scans()
+
+
+@app.get("/api/scans/{scan_id}", response_model=ScanRecordOut)
+def get_scan(scan_id: str):
+    rec = store.get_scan(scan_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Tarama kaydı bulunamadı")
+    return rec
+
+
+@app.delete("/api/scans/{scan_id}", status_code=204)
+def remove_scan(scan_id: str):
+    if not store.delete_scan(scan_id):
+        raise HTTPException(status_code=404, detail="Tarama kaydı bulunamadı")

@@ -31,6 +31,21 @@ export interface AppConfig {
   google_places_configured: boolean;
 }
 
+/** Geçmiş listesi satırı — işletme detayı içermez. */
+export interface ScanSummary {
+  id: string;
+  scanned_at: string;
+  lat: number;
+  lng: number;
+  radius_m: number;
+  stats: ScanStats;
+}
+
+/** Tek tarama kaydı — işletme listesi dahil. */
+export interface ScanRecord extends ScanSummary {
+  businesses: Business[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
@@ -41,6 +56,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch { /* gövde yok */ }
     throw new Error(detail);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -54,4 +70,16 @@ export function scanArea(lat: number, lng: number, radius_m: number): Promise<Sc
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ lat, lng, radius_m }),
   });
+}
+
+export function listScans(): Promise<ScanSummary[]> {
+  return request<ScanSummary[]>("/api/scans");
+}
+
+export function getScan(id: string): Promise<ScanRecord> {
+  return request<ScanRecord>(`/api/scans/${id}`);
+}
+
+export async function deleteScanApi(id: string): Promise<void> {
+  await request(`/api/scans/${id}`, { method: "DELETE" });
 }

@@ -8,7 +8,6 @@ import MessageModal, { type MessageKind } from "@/components/MessageModal";
 import ResultsTable, { ResultsTableSkeleton } from "@/components/ResultsTable";
 import Sidebar, { type View } from "@/components/Sidebar";
 import { getConfig, scanArea, type Business, type ScanResponse } from "@/lib/api";
-import { saveScan } from "@/lib/history";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
@@ -46,10 +45,7 @@ export default function Home() {
     try {
       const res = await scanArea(location.lat, location.lng, radius);
       setResult(res);
-      const at = new Date();
-      setLastScanAt(at);
-      saveScan({ scanned_at: at.toISOString(), lat: location.lat, lng: location.lng,
-                 radius_m: radius, stats: res.stats, businesses: res.businesses });
+      setLastScanAt(new Date());
     } catch (e) {
       setResult(null);
       setError(e instanceof Error ? e.message : "Tarama başarısız oldu");

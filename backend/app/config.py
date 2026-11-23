@@ -6,9 +6,8 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # .env proje kökündedir (backend/ üstü); çalışma dizininden bağımsız bulunur.
-_ENV_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"
-)
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_ENV_PATH = os.path.join(_ROOT, ".env")
 
 
 class Settings(BaseSettings):
@@ -27,6 +26,13 @@ class Settings(BaseSettings):
     WEBSITE_CHECK_TIMEOUT: float = 10.0
     WEBSITE_CHECK_WORKERS: int = 10
     WEBSITE_USER_AGENT: str = "Mozilla/5.0 (compatible; IsletmeRadari/1.0)"
+
+    # Tarama geçmişinin tutulduğu SQLite dosyası (boş = <proje kökü>/data/scans.db).
+    DB_PATH: str = ""
+
+    @property
+    def db_path(self) -> str:
+        return self.DB_PATH or os.path.join(_ROOT, "data", "scans.db")
 
     @property
     def cors_origins(self) -> list[str]:

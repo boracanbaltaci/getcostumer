@@ -43,3 +43,18 @@ class ScanResponse(BaseModel):
 
 class ConfigOut(BaseModel):
     google_places_configured: bool
+
+
+class ScanSummaryOut(BaseModel):
+    """Geçmiş listesi satırı — işletme detayı içermez."""
+    id: str
+    scanned_at: str
+    lat: float
+    lng: float
+    radius_m: int
+    stats: ScanStats
+
+
+class ScanRecordOut(ScanSummaryOut):
+    """Tek tarama kaydı — işletme listesi dahil."""
+    businesses: list[BusinessOut] = Field(default_factory=list)

@@ -17,16 +17,18 @@ veya **eski görünümlü web sitesi** olan işletmeleri bulan tek ekranlı uygu
 5. Aksiyon sütunundaki **e-posta** ve **SMS** ikonları taslak mesaj modal'ı açar
    (gönderim henüz bağlı değildir; metin yazıp Gönder demek modal'ı kapatır).
 
-Veritabanı yoktur; sonuçlar saklanmaz, her tarama canlıdır.
+Her başarılı tarama sonucuyla birlikte **SQLite**'a (`data/scans.db`) kaydedilir;
+"Önceki Taramalar" ekranından geri açılabilir.
 
 ## Teknoloji
 
-- **Backend:** Python + FastAPI — `backend/app/` (tek servis katmanı: `services/places.py`
-  Google istemcisi, `services/sitescan.py` site analizi)
+- **Backend:** Python + FastAPI — `backend/app/` (`services/places.py` Google istemcisi,
+  `services/sitescan.py` site analizi, `services/store.py` geçmiş kayıtları)
 - **Frontend:** Next.js + TypeScript + Tailwind + Leaflet (react-leaflet) — `frontend/src/`,
-  tek sayfa: `src/app/page.tsx`
+  iki ekran: Tarama + Önceki Taramalar
 - **Harita:** Leaflet + OpenStreetMap (anahtarsız)
 - **Veri:** Google Places API (New) — anahtar gerekli
+- **Depolama:** SQLite (`data/scans.db`) — tarama geçmişi; ek kurulum gerekmez
 
 ## Kurulum (yerel)
 
@@ -87,6 +89,7 @@ Bkz. `.env.example`. Önemlileri:
 | `PLACES_MAX_CALLS` | Tarama başına Places çağrı üst sınırı (vars. 9) |
 | `WEBSITE_CHECK_LIMIT` | Site analizi yapılacak en fazla işletme (vars. 60) |
 | `CORS_ORIGINS` | Backend'e doğrudan erişecek kökenler |
+| `DB_PATH` | Geçmiş SQLite dosyası (vars. `data/scans.db`) |
 | `WEB_PORT` | Docker'da frontend portu (vars. 3000) |
 
 ## Testler

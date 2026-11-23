@@ -6,12 +6,14 @@ Türkçe olabilir; **kullanıcıyla tüm iletişim Türkçe'dir.**
 ## Teknik özet
 
 - **Backend:** Python, FastAPI, Pydantic 2 — `backend/app/`
-  - `main.py` — HTTP katmanı: `GET /api/health`, `GET /api/config`, `POST /api/scan`
+  - `main.py` — HTTP katmanı: `GET /api/health`, `GET /api/config`, `POST /api/scan`,
+    `GET/DELETE /api/scans[/{id}]`
   - `services/places.py` — Google Places API (New) Nearby Search istemcisi
   - `services/sitescan.py` — web sitesi "eski görünümlü mü?" sezgisel analizi
+  - `services/store.py` — tarama geçmişi (SQLite, `data/scans.db`)
 - **Frontend:** Next.js (App Router), TypeScript, Tailwind, Leaflet (react-leaflet) —
   `frontend/src/`; tek sayfa `app/page.tsx`, bileşenler `components/`
-- **Veritabanı yok:** tarama sonuçları saklanmaz, her istek canlıdır.
+- **Veritabanı:** SQLite (`data/scans.db`) — yalnızca tarama geçmişi; `*.db` gitignore'da.
 - Frontend `/api/*` isteklerini `next.config.js` rewrite'ı ile backend'e proxy'ler.
 
 ## Temel ilkeler
