@@ -2,10 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Loader2, MapPin, ScanSearch } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
+import HistoryView from "@/components/HistoryView";
 import MessageModal, { type MessageKind } from "@/components/MessageModal";
-import ResultsTable from "@/components/ResultsTable";
+import ResultsTable, { ResultsTableSkeleton } from "@/components/ResultsTable";
+import Sidebar, { type View } from "@/components/Sidebar";
 import { getConfig, scanArea, type Business, type ScanResponse } from "@/lib/api";
+import { saveScan } from "@/lib/history";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
@@ -20,11 +23,13 @@ const RADIUS_OPTIONS = [
 ];
 
 export default function Home() {
+  const [view, setView] = useState<View>("scan");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [radius, setRadius] = useState(1000);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<ScanResponse | null>(null);
+  const [lastScanAt, setLastScanAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
 
@@ -39,7 +44,12 @@ export default function Home() {
     setScanning(true);
     setError(null);
     try {
-      setResult(await scanArea(location.lat, location.lng, radius));
+      const res = await scanArea(location.lat, location.lng, radius);
+      setResult(res);
+      const at = new Date();
+      setLastScanAt(at);
+      saveScan({ scanned_at: at.toISOString(), lat: location.lat, lng: location.lng,
+                 radius_m: radius, stats: res.stats, businesses: res.businesses });
     } catch (e) {
       setResult(null);
       setError(e instanceof Error ? e.message : "Tarama başarısız oldu");
@@ -49,93 +59,105 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-4 lg:p-6">
-      <header className="mb-4 flex items-center gap-3">
-        <ScanSearch className="text-brand-600" size={26} />
-        <div>
-          <h1 className="text-lg font-bold text-slate-900">İşletme Radarı</h1>
-          <p className="text-xs text-slate-500">Web sitesi olmayan veya eski siteli işletmeleri bulur</p>
-        </div>
-      </header>
+    <div className="min-h-screen lg:flex">
+      <Sidebar view={view} onNavigate={setView} />
+      <main className="min-w-0 flex-1 p-4 lg:p-6">
+        {view === "history" && <HistoryView />}
+        {view === "scan" && (
+          <>
+            {configured === false && (
+              <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <strong>Google Places API anahtarı tanımlı değil.</strong> Tarama yapabilmek için
+                backend <code className="rounded bg-amber-100 px-1">.env</code> dosyasına{" "}
+                <code className="rounded bg-amber-100 px-1">GOOGLE_PLACES_API_KEY</code> ekleyip
+                servisi yeniden başlatın (README → &quot;Google API anahtarı alma&quot;).
+              </div>
+            )}
 
-      {configured === false && (
-        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <strong>Google Places API anahtarı tanımlı değil.</strong> Tarama yapabilmek için
-          backend <code className="rounded bg-amber-100 px-1">.env</code> dosyasına{" "}
-          <code className="rounded bg-amber-100 px-1">GOOGLE_PLACES_API_KEY</code> ekleyip
-          servisi yeniden başlatın (README → "Google API anahtarı alma").
-        </div>
-      )}
+            <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
+                <span className="flex items-center gap-1.5 text-sm text-slate-600">
+                  <MapPin size={15} className="text-brand-600" />
+                  {location
+                    ? `Seçili: ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`
+                    : "Konum seçmek için haritaya tıklayın"}
+                </span>
+                <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
+                  Yarıçap
+                  <select value={radius} onChange={(e) => setRadius(Number(e.target.value))}
+                          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none">
+                    {RADIUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={handleScan} disabled={!location || scanning || configured === false}
+                        className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:bg-slate-300">
+                  {scanning && <Loader2 size={15} className="animate-spin" />}
+                  {scanning ? "Taranıyor…" : "Tara"}
+                </button>
+              </div>
+              <div className="h-[420px] p-3">
+                <MapPicker value={location} radius={radius} onPick={setLocation} />
+              </div>
+            </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
-          <span className="flex items-center gap-1.5 text-sm text-slate-600">
-            <MapPin size={15} className="text-brand-600" />
-            {location
-              ? `Seçili: ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`
-              : "Konum seçmek için haritaya tıklayın"}
-          </span>
-          <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
-            Yarıçap
-            <select value={radius} onChange={(e) => setRadius(Number(e.target.value))}
-                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none">
-              {RADIUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </label>
-          <button type="button" onClick={handleScan} disabled={!location || scanning || configured === false}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:bg-slate-300">
-            {scanning && <Loader2 size={15} className="animate-spin" />}
-            {scanning ? "Taranıyor…" : "Tara"}
-          </button>
-        </div>
-        <div className="h-[420px] p-3">
-          <MapPicker value={location} radius={radius} onPick={setLocation} />
-        </div>
-      </section>
+            {error && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
-      {error && (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+            {scanning && (
+              <section className="mt-4">
+                <p className="mb-2 text-sm text-slate-500">Bölge taranıyor, işletme siteleri inceleniyor…</p>
+                <ResultsTableSkeleton />
+              </section>
+            )}
 
-      {result && (
-        <section className="mt-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium text-slate-700">
-              {result.stats.found} işletme tarandı → {result.stats.shown} aday listelendi:
-            </span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-              {result.stats.without_website} sitesiz
-            </span>
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-              {result.stats.outdated_website} eski siteli
-            </span>
-            <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
-              {result.stats.unreachable_website} ulaşılamayan
-            </span>
-            <span className="text-xs text-slate-400">
-              ({result.stats.filtered_modern} modern siteli elendi)
-            </span>
-          </div>
-          {result.warnings.length > 0 && (
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              {result.warnings.map((w, i) => <div key={i}>{w}</div>)}
-            </div>
-          )}
-          {result.businesses.length
-            ? <ResultsTable businesses={result.businesses}
-                            onEmail={(b) => setModal({ kind: "email", business: b })}
-                            onSms={(b) => setModal({ kind: "sms", business: b })} />
-            : <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 shadow-sm">
-                Bu bölgede sitesiz/eski siteli işletme bulunamadı.
-              </div>}
-        </section>
-      )}
+            {!scanning && result && (
+              <section className="mt-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-medium text-slate-700">
+                    {result.stats.found} işletme tarandı → {result.stats.shown} aday listelendi:
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                    {result.stats.without_website} sitesiz
+                  </span>
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                    {result.stats.outdated_website} eski siteli
+                  </span>
+                  <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                    {result.stats.unreachable_website} ulaşılamayan
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    ({result.stats.filtered_modern} modern siteli elendi)
+                  </span>
+                  {lastScanAt && (
+                    <span className="ml-auto text-xs text-slate-400">
+                      Son tarama: {lastScanAt.toLocaleTimeString("tr-TR")}
+                    </span>
+                  )}
+                </div>
+                {result.warnings.length > 0 && (
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    {result.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                  </div>
+                )}
+                {result.businesses.length
+                  ? <ResultsTable businesses={result.businesses}
+                                  onEmail={(b) => setModal({ kind: "email", business: b })}
+                                  onSms={(b) => setModal({ kind: "sms", business: b })} />
+                  : <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 shadow-sm">
+                      Bu bölgede sitesiz/eski siteli işletme bulunamadı.
+                    </div>}
+              </section>
+            )}
+          </>
+        )}
+      </main>
 
       {modal && (
         <MessageModal kind={modal.kind} business={modal.business} onClose={() => setModal(null)} />
       )}
-    </main>
+    </div>
   );
 }
