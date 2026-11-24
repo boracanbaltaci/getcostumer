@@ -13,4 +13,6 @@ before debugging blind. One-off bugs are not lessons.
 
 ## Infra / DevEx
 
-- (none yet)
+- `docker compose up` var olan imajı kullanır — kod değişikliği sonrası
+  `up -d --build` şart, yoksa arayüz/API eski kodla gelir. Doğrulama:
+  `docker compose ps` + `curl 127.0.0.1:$WEB_PORT`.

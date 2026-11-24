@@ -10,7 +10,7 @@ import MessagesView from "@/components/MessagesView";
 import MessageModal, { type MessageKind } from "@/components/MessageModal";
 import ResultsTable, { ResultsTableSkeleton } from "@/components/ResultsTable";
 import Sidebar, { type View } from "@/components/Sidebar";
-import { addBusinessFavoriteApi, getConfig, listBusinessFavorites, listScans, logout, me,
+import { addBusinessFavoriteApi, getConfig, getScan, listBusinessFavorites, listScans, logout, me,
          removeBusinessFavoriteApi, scanArea,
          type Business, type BusinessFavorite, type ScanResponse, type ScanSummary } from "@/lib/api";
 
@@ -60,7 +60,23 @@ export default function Home() {
     listBusinessFavorites()
       .then(setBizFavorites)
       .catch(() => setBizFavorites([]));
+    restoreLastScan();
   }, [user]);
+
+  // Yenilemede son taramayı geri yükle: kayıtlar kullanıcıya bağlı ve
+  // list_scans en yeni başta döner.
+  async function restoreLastScan() {
+    try {
+      const list = await listScans();
+      const latest = list[0];
+      if (!latest) return;
+      const rec = await getScan(latest.id);
+      setLocation({ lat: rec.lat, lng: rec.lng });
+      setRadius(rec.radius_m);
+      setResult({ businesses: rec.businesses, stats: rec.stats, warnings: [] });
+      setLastScanAt(new Date(rec.scanned_at));
+    } catch { /* son tarama yüklenemezse boş başlar */ }
+  }
 
   // Haritadaki taralı bölge daireleri: tara görünümüne her dönüşte tazelenir
   // ki geçmişte silinen kayıtlar haritada kalmasın.
