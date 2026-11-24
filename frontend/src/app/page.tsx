@@ -10,9 +10,9 @@ import MessagesView from "@/components/MessagesView";
 import MessageModal, { type MessageKind } from "@/components/MessageModal";
 import ResultsTable, { ResultsTableSkeleton } from "@/components/ResultsTable";
 import Sidebar, { type View } from "@/components/Sidebar";
-import { addBusinessFavoriteApi, getConfig, listBusinessFavorites, logout, me,
+import { addBusinessFavoriteApi, getConfig, listBusinessFavorites, listScans, logout, me,
          removeBusinessFavoriteApi, scanArea,
-         type Business, type BusinessFavorite, type ScanResponse } from "@/lib/api";
+         type Business, type BusinessFavorite, type ScanResponse, type ScanSummary } from "@/lib/api";
 
 const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
@@ -39,6 +39,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
   const [bizFavorites, setBizFavorites] = useState<BusinessFavorite[]>([]);
+  const [scans, setScans] = useState<ScanSummary[]>([]);
   const favBizIds = useMemo(() => new Set(bizFavorites.map((f) => f.place_id)), [bizFavorites]);
 
   useEffect(() => {
@@ -61,6 +62,18 @@ export default function Home() {
       .catch(() => setBizFavorites([]));
   }, [user]);
 
+  // Haritadaki taralı bölge daireleri: tara görünümüne her dönüşte tazelenir
+  // ki geçmişte silinen kayıtlar haritada kalmasın.
+  useEffect(() => {
+    if (user && view === "scan") refreshScans();
+  }, [user, view]);
+
+  async function refreshScans() {
+    try {
+      setScans(await listScans());
+    } catch { /* liste alınamazsa harita sessiz kalır */ }
+  }
+
   async function handleScan() {
     if (!location || scanning) return;
     setScanning(true);
@@ -69,6 +82,7 @@ export default function Home() {
       const res = await scanArea(location.lat, location.lng, radius);
       setResult(res);
       setLastScanAt(new Date());
+      refreshScans();
     } catch (e) {
       setResult(null);
       setError(e instanceof Error ? e.message : "Tarama başarısız oldu");
@@ -161,7 +175,7 @@ export default function Home() {
                 </button>
               </div>
               <div className="h-[420px] p-3">
-                <MapPicker value={location} radius={radius} onPick={setLocation} />
+                <MapPicker value={location} radius={radius} scans={scans} onPick={setLocation} />
               </div>
             </section>
 

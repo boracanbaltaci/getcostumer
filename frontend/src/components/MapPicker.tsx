@@ -1,7 +1,8 @@
 "use client";
 
 import L from "leaflet";
-import { Circle, MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
+import { Circle, MapContainer, Marker, TileLayer, Tooltip, useMapEvents } from "react-leaflet";
+import type { ScanSummary } from "@/lib/api";
 
 export interface PickedLocation {
   lat: number;
@@ -29,9 +30,15 @@ function ClickCatcher({ onPick }: { onPick: (p: PickedLocation) => void }) {
   return null;
 }
 
-export default function MapPicker({ value, radius, onPick }: {
+function scanLabel(s: ScanSummary): string {
+  const d = new Date(s.scanned_at).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
+  return `${d} · ${s.stats.shown} aday`;
+}
+
+export default function MapPicker({ value, radius, scans, onPick }: {
   value: PickedLocation | null;
   radius: number;
+  scans: ScanSummary[];
   onPick: (p: PickedLocation) => void;
 }) {
   return (
@@ -46,6 +53,16 @@ export default function MapPicker({ value, radius, onPick }: {
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <ClickCatcher onPick={onPick} />
+      {scans.map((s) => (
+        <Circle
+          key={s.id}
+          center={[s.lat, s.lng]}
+          radius={s.radius_m}
+          pathOptions={{ color: "#0f766e", weight: 1.5, dashArray: "6 6", fillOpacity: 0.06 }}
+        >
+          <Tooltip>{scanLabel(s)}</Tooltip>
+        </Circle>
+      ))}
       {value && (
         <>
           <Marker
