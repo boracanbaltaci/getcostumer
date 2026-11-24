@@ -10,6 +10,46 @@ const STATUS_BADGE: Record<Business["website_status"], { text: string; cls: stri
   erisilemedi: { text: "Ulaşılamadı", cls: "bg-red-100 text-red-700" },
 };
 
+const PRIORITY_CLS: Record<Business["priority"], string> = {
+  A: "bg-emerald-100 text-emerald-800",
+  B: "bg-amber-100 text-amber-800",
+  C: "bg-slate-100 text-slate-600",
+};
+
+function factorTooltip(b: Business): string {
+  if (!b.score_factors.length) return "Puan faktörü yok";
+  return b.score_factors
+    .map((f) => `${f.label} (${f.points > 0 ? "+" : ""}${f.points}${f.basis === "tahmini" ? ", tahmini" : ""})`)
+    .join("\n");
+}
+
+// Backend sitescan.SOCIAL_WEBSITE_DOMAINS ile aynı liste — "yok" çipini platform adıyla değiştirir.
+const SOCIAL_SITES: [string, string][] = [
+  ["instagram.com", "Instagram"],
+  ["facebook.com", "Facebook"],
+  ["fb.com", "Facebook"],
+  ["fb.me", "Facebook"],
+  ["twitter.com", "X (Twitter)"],
+  ["x.com", "X (Twitter)"],
+  ["tiktok.com", "TikTok"],
+  ["youtube.com", "YouTube"],
+  ["wa.me", "WhatsApp"],
+  ["whatsapp.com", "WhatsApp"],
+  ["linktr.ee", "Linktree"],
+  ["beacons.ai", "Beacons"],
+  ["bio.link", "bio.link"],
+];
+
+function socialPlatform(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    for (const [domain, label] of SOCIAL_SITES) {
+      if (host === domain || host.endsWith("." + domain)) return label;
+    }
+  } catch { /* geçersiz URL */ }
+  return null;
+}
+
 type StatusFilter = "all" | "yok" | "var" | "eski";
 
 function matches(b: Business, f: StatusFilter): boolean {
@@ -26,6 +66,7 @@ const HEAD = (
       <th className="px-4 py-3">Konum</th>
       <th className="px-4 py-3">Telefon</th>
       <th className="px-4 py-3">Web Sitesi</th>
+      <th className="px-4 py-3">Fırsat</th>
       <th className="px-4 py-3 text-right">Aksiyon</th>
     </tr>
   </thead>
@@ -75,6 +116,9 @@ export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, 
           <tbody className="divide-y divide-slate-100">
             {rows.map((b) => {
               const badge = STATUS_BADGE[b.website_status];
+              const social = b.website_status === "yok" && b.website
+                ? socialPlatform(b.website)
+                : null;
               return (
                 <tr key={b.place_id} className="hover:bg-slate-50">
                   <td className="max-w-56 px-4 py-3 font-medium text-slate-900">{b.name}</td>
@@ -92,8 +136,25 @@ export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, 
                         : <span className="text-slate-400">—</span>}
                       <span title={b.website_notes.join("; ") || badge.text}
                             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
-                        {badge.text}
+                        {social ?? badge.text}
                       </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-start gap-1.5">
+                      <span title={factorTooltip(b)}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${PRIORITY_CLS[b.priority]}`}>
+                        {b.priority} · {b.score}
+                      </span>
+                      {b.recommended_services.length > 0 && (
+                        <div className="flex max-w-56 flex-wrap gap-1">
+                          {b.recommended_services.map((s) => (
+                            <span key={s} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -124,7 +185,7 @@ export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, 
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">Bu filtreye uyan işletme yok.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-400">Bu filtreye uyan işletme yok.</td></tr>
             )}
           </tbody>
         </table>
@@ -147,7 +208,7 @@ export function ResultsTableSkeleton({ rows = 8 }: { rows?: number }) {
           <tbody>
             {Array.from({ length: rows }).map((_, i) => (
               <tr key={i} className="border-b border-slate-50">
-                {[40, 56, 24, 48, 16].map((w, j) => (
+                {[40, 56, 24, 48, 32, 16].map((w, j) => (
                   <td key={j} className="px-4 py-3.5">
                     <div className={`h-4 animate-pulse rounded bg-slate-100`} style={{ width: `${w}%` }} />
                   </td>

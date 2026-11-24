@@ -1,4 +1,11 @@
 export type WebsiteStatus = "yok" | "eski" | "erisilemedi";
+export type Priority = "A" | "B" | "C";
+
+export interface ScoreFactor {
+  points: number;
+  label: string;
+  basis: "dogrulanmis" | "tahmini";
+}
 
 export interface Business {
   place_id: string;
@@ -10,6 +17,10 @@ export interface Business {
   website: string | null;
   website_status: WebsiteStatus;
   website_notes: string[];
+  score: number;
+  priority: Priority;
+  score_factors: ScoreFactor[];
+  recommended_services: string[];
 }
 
 export interface ScanStats {

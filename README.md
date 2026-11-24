@@ -10,11 +10,18 @@ veya **eski görünümlü web sitesi** olan işletmeleri bulan tek ekranlı uygu
 3. Backend, Google Places API (New) ile çevredeki işletmeleri tarar; sitesi olanların
    ana sayfasını indirip "eski görünümlü mü?" analizini yapar (HTTPS yokluğu, mobil
    uyum etiketi yokluğu, eski doctype, terk edilmiş etiketler, Flash, eski CMS…).
-4. Sonuçlar tabloda listelenir: **Firma Adı | Konum | Telefon | Web Sitesi | Aksiyon**.
+4. Sonuçlar tabloda listelenir: **Firma Adı | Konum | Telefon | Web Sitesi | Fırsat | Aksiyon**.
    - `Site yok` — Google kaydında web sitesi yok
+   - Sosyal medya adı (`Facebook`, `Instagram`, `WhatsApp`…) — site yerine sosyal medya profili kayıtlı
    - `Eski görünümlü` — site var ama teknik olarak eski
    - `Ulaşılamadı` — site açılmıyor / park sayfası
-5. Aksiyon sütunundaki **e-posta** ve **SMS** ikonları taslak mesaj modal'ı açar
+5. Her işletmeye **fırsat puanı** (0-100) ve **A/B/C önceliği** verilir; tablo puana
+   göre azalan sıralanır. Puan, açıklanabilir faktörlerin toplamıdır (hover'da
+   dökümü görünür): site durumu (yok +30 / eski +20 / ulaşılamadı +15), sektör
+   uygunluğu (`primaryType` → randevu +15, perakende +15, yeme-içme +10, ofis +10,
+   servis +8), telefon +5, şirket unvanı +5, bilişim firması −10. Yanındaki
+   etiketler önerilen hizmeti gösterir (ör. "Kurumsal web sitesi", "E-ticaret").
+6. Aksiyon sütunundaki **e-posta** ve **SMS** ikonları taslak mesaj modal'ı açar
    (gönderim henüz bağlı değildir; metin yazıp Gönder demek modal'ı kapatır).
    Modal'ın üstündeki açılır listeden **Hızlı Mesajlar** ekranında kayıtlı
    şablonlar seçilip metni doldurur.
@@ -41,8 +48,8 @@ taşınan bir oturum token'ıdır (`SESSION_TTL_DAYS` gün geçerli).
 ## Teknoloji
 
 - **Backend:** Python + FastAPI — `backend/app/` (`services/places.py` Google istemcisi,
-  `services/sitescan.py` site analizi, `services/store.py` tarama/favori/kullanıcı
-  kayıtları, `services/auth.py` giriş + oturum)
+  `services/sitescan.py` site analizi, `services/scoring.py` fırsat puanı,
+  `services/store.py` tarama/favori/kullanıcı kayıtları, `services/auth.py` giriş + oturum)
 - **Frontend:** Next.js + TypeScript + Tailwind + Leaflet (react-leaflet) — `frontend/src/`,
   ekranlar: Giriş, Tarama, Önceki Taramalar, Favoriler, Hızlı Mesajlar
 - **Harita:** Leaflet + OpenStreetMap (anahtarsız)
@@ -75,6 +82,9 @@ Frontend `/api/*` isteklerini `next.config.js`'deki rewrite ile backend'e proxy'
 ```bash
 docker compose up -d --build   # frontend + backend tek komutla
 ```
+
+> Kod değişikliği sonrası `--build` şart: `docker compose up` var olan imajı
+> kullanır, yeniden derlemez.
 
 Arayüz: `http://localhost:${WEB_PORT:-3000}` (çakışırsa `.env`'de `WEB_PORT`
 değiştir). Backend host portu açmaz — frontend, `/api/*` isteklerini compose

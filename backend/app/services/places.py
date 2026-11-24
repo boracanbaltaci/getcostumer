@@ -67,6 +67,7 @@ def _normalize(place: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "lng": loc.get("longitude"),
         "phone": place.get("nationalPhoneNumber") or place.get("internationalPhoneNumber") or "",
         "website": place.get("websiteUri"),
+        "primary_type": place.get("primaryType"),
     }
 
 

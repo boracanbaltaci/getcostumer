@@ -11,8 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.schemas import (BusinessFavoriteOut, BusinessOut, ConfigOut, FavoriteBusinessIn,
                          LoginRequest, QuickMessageIn, QuickMessageOut, ScanRecordOut,
-                         ScanRequest, ScanResponse, ScanStats, ScanSummaryOut, UserOut)
-from app.services import auth, places, sitescan, store
+                         ScanRequest, ScanResponse, ScanStats, ScanSummaryOut, ScoreFactor,
+                         UserOut)
+from app.services import auth, places, scoring, sitescan, store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -124,16 +125,20 @@ def scan(req: ScanRequest, user: dict = Depends(auth.get_current_user)):
                 continue
             results[out.place_id] = out
 
-    for b in results.values():
+    rec_by_id = {r["place_id"]: r for r in records}
+    for pid, b in results.items():
         if b.website_status == "yok":
             stats.without_website += 1
         elif b.website_status == "eski":
             stats.outdated_website += 1
         else:
             stats.unreachable_website += 1
+        scored = scoring.score_business(rec_by_id[pid], b.website_status)
+        b.score, b.priority = scored["score"], scored["priority"]
+        b.score_factors = [ScoreFactor(**f) for f in scored["factors"]]
+        b.recommended_services = scored["services"]
 
-    order = {"yok": 0, "erisilemedi": 1, "eski": 2}
-    businesses = sorted(results.values(), key=lambda b: (order[b.website_status], b.name.lower()))
+    businesses = sorted(results.values(), key=lambda b: (-b.score, b.name.lower()))
     stats.shown = len(businesses)
 
     try:  # geçmiş kaydı: yazma hatası tarama sonucunu etkilemesin

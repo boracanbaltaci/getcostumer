@@ -12,6 +12,13 @@ class ScanRequest(BaseModel):
 
 
 WebsiteStatus = Literal["yok", "eski", "erisilemedi"]
+Priority = Literal["A", "B", "C"]
+
+
+class ScoreFactor(BaseModel):
+    points: int
+    label: str
+    basis: Literal["dogrulanmis", "tahmini"] = "tahmini"
 
 
 class BusinessOut(BaseModel):
@@ -24,6 +31,10 @@ class BusinessOut(BaseModel):
     website: Optional[str] = None
     website_status: WebsiteStatus
     website_notes: list[str] = Field(default_factory=list)
+    score: int = 0
+    priority: Priority = "C"
+    score_factors: list[ScoreFactor] = Field(default_factory=list)
+    recommended_services: list[str] = Field(default_factory=list)
 
 
 class ScanStats(BaseModel):
