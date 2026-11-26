@@ -12,7 +12,7 @@ export default function FavoritesView({ favorites, favoriteIds, onToggleFavorite
   favoriteIds: Set<string>;
   onToggleFavorite: (b: Business) => void;
 }) {
-  const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
+  const [modal, setModal] = useState<{ kind: MessageKind; businesses: Business[] } | null>(null);
   const businesses = favorites.map((f) => f.business);
 
   return (
@@ -27,8 +27,9 @@ export default function FavoritesView({ favorites, favoriteIds, onToggleFavorite
         <div className="bg-slate-50/60 p-3">
           {businesses.length ? (
             <ResultsTable businesses={businesses}
-                          onEmail={(b) => setModal({ kind: "email", business: b })}
-                          onSms={(b) => setModal({ kind: "sms", business: b })}
+                          onEmail={(b) => setModal({ kind: "email", businesses: [b] })}
+                          onSms={(b) => setModal({ kind: "sms", businesses: [b] })}
+                          onBulkEmail={(bs) => setModal({ kind: "email", businesses: bs })}
                           favoriteIds={favoriteIds}
                           onToggleFavorite={onToggleFavorite} />
           ) : (
@@ -41,7 +42,7 @@ export default function FavoritesView({ favorites, favoriteIds, onToggleFavorite
 
       <HistoryView favoritesOnly favoriteIds={favoriteIds} onToggleFavorite={onToggleFavorite} />
 
-      {modal && <MessageModal kind={modal.kind} business={modal.business} onClose={() => setModal(null)} />}
+      {modal && <MessageModal kind={modal.kind} businesses={modal.businesses} onClose={() => setModal(null)} />}
     </div>
   );
 }

@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS business_favorites (
 CREATE TABLE IF NOT EXISTS quick_messages (
     id         TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
+    title      TEXT NOT NULL DEFAULT '',
     text       TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
@@ -125,6 +126,8 @@ def init_db() -> None:
             # eklenir (yeni şemada zaten var; IF NOT EXISTS no-op olur).
             conn.execute(
                 "ALTER TABLE scans ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT ''")
+            conn.execute(
+                "ALTER TABLE quick_messages ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT ''")
         return
     os.makedirs(os.path.dirname(settings.db_path), exist_ok=True)
     with _connect() as conn:
@@ -135,6 +138,10 @@ def init_db() -> None:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(scans)")}
             if "user_id" not in cols:
                 conn.execute("ALTER TABLE scans ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
+        if "quick_messages" in tables:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(quick_messages)")}
+            if "title" not in cols:
+                conn.execute("ALTER TABLE quick_messages ADD COLUMN title TEXT NOT NULL DEFAULT ''")
         conn.executescript(_SCHEMA)
 
 
@@ -407,7 +414,7 @@ def remove_business_favorite(user_id: str, place_id: str) -> bool:
 def list_quick_messages(user_id: str) -> List[Dict[str, Any]]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id, text, created_at FROM quick_messages"
+            "SELECT id, title, text, created_at FROM quick_messages"
             " WHERE user_id = ? ORDER BY created_at DESC"
             + (", id DESC" if _pg() else ", rowid DESC"),
             (user_id,),
@@ -415,21 +422,23 @@ def list_quick_messages(user_id: str) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def add_quick_message(user_id: str, text: str) -> Dict[str, Any]:
-    msg = {"id": uuid.uuid4().hex[:12], "text": text.strip(), "created_at": _utcnow()}
+def add_quick_message(user_id: str, title: str, text: str) -> Dict[str, Any]:
+    msg = {"id": uuid.uuid4().hex[:12], "title": title.strip(),
+           "text": text.strip(), "created_at": _utcnow()}
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO quick_messages (id, user_id, text, created_at) VALUES (?, ?, ?, ?)",
-            (msg["id"], user_id, msg["text"], msg["created_at"]),
+            "INSERT INTO quick_messages (id, user_id, title, text, created_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (msg["id"], user_id, msg["title"], msg["text"], msg["created_at"]),
         )
     return msg
 
 
-def update_quick_message(user_id: str, msg_id: str, text: str) -> bool:
+def update_quick_message(user_id: str, msg_id: str, title: str, text: str) -> bool:
     with _connect() as conn:
         cur = conn.execute(
-            "UPDATE quick_messages SET text = ? WHERE id = ? AND user_id = ?",
-            (text.strip(), msg_id, user_id),
+            "UPDATE quick_messages SET title = ?, text = ? WHERE id = ? AND user_id = ?",
+            (title.strip(), text.strip(), msg_id, user_id),
         )
     return cur.rowcount > 0
 

@@ -14,6 +14,7 @@ export interface Business {
   lat: number | null;
   lng: number | null;
   phone: string;
+  email: string;
   website: string | null;
   website_status: WebsiteStatus;
   website_notes: string[];
@@ -40,6 +41,7 @@ export interface ScanResponse {
 
 export interface AppConfig {
   google_places_configured: boolean;
+  smtp_configured: boolean;
 }
 
 /** Geçmiş listesi satırı — işletme detayı içermez. */
@@ -72,8 +74,15 @@ export interface BusinessFavorite {
 /** Kayıtlı hızlı mesaj şablonu. */
 export interface QuickMessage {
   id: string;
+  title: string;
   text: string;
   created_at: string;
+}
+
+/** E-posta gönderim sonucu — alıcı bazlı hata listesiyle. */
+export interface SendEmailResult {
+  sent: number;
+  failed: { to: string; error: string }[];
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -165,22 +174,39 @@ export function listQuickMessages(): Promise<QuickMessage[]> {
   return request<QuickMessage[]>("/api/quick-messages");
 }
 
-export function addQuickMessageApi(text: string): Promise<QuickMessage> {
+export function addQuickMessageApi(title: string, text: string): Promise<QuickMessage> {
   return request<QuickMessage>("/api/quick-messages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ title, text }),
   });
 }
 
-export async function updateQuickMessageApi(id: string, text: string): Promise<void> {
+export async function updateQuickMessageApi(id: string, title: string, text: string): Promise<void> {
   await request(`/api/quick-messages/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ title, text }),
   });
 }
 
 export async function deleteQuickMessageApi(id: string): Promise<void> {
   await request(`/api/quick-messages/${id}`, { method: "DELETE" });
+}
+
+export function sendEmailApi(recipients: { to: string; name: string }[],
+                             subject: string, body: string): Promise<SendEmailResult> {
+  return request<SendEmailResult>("/api/email/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipients, subject, body }),
+  });
+}
+
+export function discoverEmailsApi(websites: string[]): Promise<{ results: Record<string, string[]> }> {
+  return request<{ results: Record<string, string[]> }>("/api/email/discover", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ websites }),
+  });
 }

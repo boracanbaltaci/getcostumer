@@ -28,6 +28,7 @@ class BusinessOut(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     phone: str = ""
+    email: str = ""                     # sitesinden çıkarılan ilk e-posta (yoksa "")
     website: Optional[str] = None
     website_status: WebsiteStatus
     website_notes: list[str] = Field(default_factory=list)
@@ -54,6 +55,7 @@ class ScanResponse(BaseModel):
 
 class ConfigOut(BaseModel):
     google_places_configured: bool
+    smtp_configured: bool = False
 
 
 class ScanSummaryOut(BaseModel):
@@ -85,13 +87,47 @@ class BusinessFavoriteOut(BaseModel):
 
 
 class QuickMessageIn(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
     text: str = Field(..., min_length=1, max_length=4000)
 
 
 class QuickMessageOut(BaseModel):
     id: str
+    title: str
     text: str
     created_at: str
+
+
+# ---- E-posta gönderimi ----
+
+
+class EmailRecipient(BaseModel):
+    to: str = Field(..., min_length=3, max_length=320)
+    name: str = Field(default="", max_length=200)   # {firma_adi} için
+
+
+class SendEmailIn(BaseModel):
+    recipients: list[EmailRecipient] = Field(..., min_length=1, max_length=100)
+    subject: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=8000)
+
+
+class SendEmailFailure(BaseModel):
+    to: str
+    error: str
+
+
+class SendEmailOut(BaseModel):
+    sent: int
+    failed: list[SendEmailFailure] = Field(default_factory=list)
+
+
+class EmailDiscoverIn(BaseModel):
+    websites: list[str] = Field(..., min_length=1, max_length=100)
+
+
+class EmailDiscoverOut(BaseModel):
+    results: dict[str, list[str]] = Field(default_factory=dict)
 
 
 # ---- Auth ----

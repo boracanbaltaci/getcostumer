@@ -16,6 +16,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import settings
+from app.services.emailscan import extract_emails
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class SiteVerdict:
     score: int = 0
     notes: list[str] = field(default_factory=list)
     final_url: str = ""
+    emails: list[str] = field(default_factory=list)  # ana sayfadan çıkan adresler
 
 
 def _fetch(url: str) -> Tuple[Optional[str], str, str]:
@@ -150,4 +152,5 @@ def check_website(url: str, now_year: int) -> SiteVerdict:
                          final_url=final_url)
     score, notes = analyze_html(html, final_url, now_year)
     status = "eski" if score >= OLD_THRESHOLD else "modern"
-    return SiteVerdict(status=status, score=score, notes=notes, final_url=final_url)
+    return SiteVerdict(status=status, score=score, notes=notes,
+                       final_url=final_url, emails=extract_emails(html))

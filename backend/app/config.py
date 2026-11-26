@@ -27,6 +27,21 @@ class Settings(BaseSettings):
     WEBSITE_CHECK_WORKERS: int = 10
     WEBSITE_USER_AGENT: str = "Mozilla/5.0 (compatible; IsletmeRadari/1.0)"
 
+    # E-posta gönderimi (SMTP). SMTP_HOST boşsa gönderim uçları 503 döner.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    # Gönderen adresi; boşsa SMTP_USERNAME kullanılır.
+    SMTP_FROM: str = ""
+    # 587 → STARTTLS; 465 verilirse SMTP_SSL kullanılır, bu bayrak yok sayılır.
+    SMTP_TLS: bool = True
+    SMTP_TIMEOUT: float = 15.0
+
+    # E-posta kazıma (modal açılınca): istek başına en fazla site.
+    EMAIL_DISCOVER_MAX_SITES: int = 20
+    EMAIL_DISCOVER_WORKERS: int = 5
+
     # Postgres bağlantı dizesi; doluysa tüm kalıcı veri burada tutulur.
     # Boşsa SQLite dosyası kullanılır (yerel geliştirme + testler).
     DATABASE_URL: str = ""
@@ -47,6 +62,14 @@ class Settings(BaseSettings):
     @property
     def google_configured(self) -> bool:
         return bool(self.GOOGLE_PLACES_API_KEY.strip())
+
+    @property
+    def smtp_from(self) -> str:
+        return (self.SMTP_FROM or self.SMTP_USERNAME).strip()
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.SMTP_HOST.strip() and self.smtp_from)
 
 
 @lru_cache

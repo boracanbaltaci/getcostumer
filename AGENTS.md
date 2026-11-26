@@ -13,9 +13,13 @@ dokümanlar İngilizce. **Kullanıcıyla tüm iletişim Türkçe'dir.**
     `GET/DELETE /api/scans[/{id}]`, `POST /api/auth/login`, `POST /api/auth/logout`,
     `GET /api/auth/me`, `GET/PUT/DELETE /api/favorites[/{scan_id}]` (tarama favorileri),
     `GET/PUT/DELETE /api/business-favorites[/{place_id}]` (işletme favorileri),
-    `GET/POST/DELETE /api/quick-messages[/{id}]` (hızlı mesaj şablonları)
+    `GET/POST/DELETE /api/quick-messages[/{id}]` (hızlı mesaj şablonları),
+    `POST /api/email/discover` (siteden e-posta kazıma), `POST /api/email/send`
+    (SMTP toplu gönderim; `{firma_adi}` tutucusu)
   - `services/places.py` — Google Places API (New) Nearby Search istemcisi (`FIELD_MASK` sabit)
   - `services/sitescan.py` — web sitesi "eski görünümlü mü?" sezgisel analizi
+  - `services/emailscan.py` — HTML'den e-posta çıkarma + iletişim sayfası gezme
+  - `services/mailer.py` — smtplib toplu gönderim (alıcı bazlı hata listesi)
   - `services/scoring.py` — yazılım/dijital fırsat puanı (kural tabanlı; site
     durumu + `primaryType` sektör uygunluğu + isim sinyalleri → 0-100, A/B/C)
   - `services/store.py` — tarama geçmişi + kullanıcılar/oturumlar/favoriler

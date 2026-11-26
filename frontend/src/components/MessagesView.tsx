@@ -10,6 +10,7 @@ export default function MessagesView() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -21,26 +22,29 @@ export default function MessagesView() {
 
   function openAdd() {
     setEditId(null);
+    setTitleDraft("");
     setDraft("");
     setOpen(true);
   }
 
   function openEdit(m: QuickMessage) {
     setEditId(m.id);
+    setTitleDraft(m.title);
     setDraft(m.text);
     setOpen(true);
   }
 
   async function save() {
+    const title = titleDraft.trim();
     const text = draft.trim();
-    if (!text || busy) return;
+    if (!title || !text || busy) return;
     setBusy(true);
     try {
       if (editId) {
-        await updateQuickMessageApi(editId, text);
-        setMessages((prev) => (prev ?? []).map((m) => (m.id === editId ? { ...m, text } : m)));
+        await updateQuickMessageApi(editId, title, text);
+        setMessages((prev) => (prev ?? []).map((m) => (m.id === editId ? { ...m, title, text } : m)));
       } else {
-        const msg = await addQuickMessageApi(text);
+        const msg = await addQuickMessageApi(title, text);
         setMessages((prev) => [msg, ...(prev ?? [])]);
       }
       setOpen(false);
@@ -81,7 +85,8 @@ export default function MessagesView() {
           </button>
           {messages.map((m) => (
             <div key={m.id} className="group relative rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="whitespace-pre-wrap pr-6 text-sm text-slate-700">{m.text}</p>
+              <p className="pr-6 text-sm font-semibold text-slate-800">{m.title}</p>
+              <p className="mt-1 whitespace-pre-wrap pr-6 text-sm text-slate-700">{m.text}</p>
               <div className="absolute right-3 top-3 flex gap-0.5">
                 <button type="button" onClick={() => openEdit(m)} aria-label="Mesajı düzenle"
                         className="rounded-lg p-1 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600">
@@ -117,8 +122,16 @@ export default function MessagesView() {
               </button>
             </header>
             <div className="p-5">
-              <textarea
+              <input
+                type="text"
                 autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                placeholder="Başlık (e-posta konusu)…"
+                aria-label="Mesaj başlığı"
+                className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              <textarea
                 rows={6}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -130,7 +143,7 @@ export default function MessagesView() {
                         className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                   Vazgeç
                 </button>
-                <button type="button" onClick={save} disabled={!draft.trim() || busy}
+                <button type="button" onClick={save} disabled={!titleDraft.trim() || !draft.trim() || busy}
                         className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:bg-slate-300">
                   {busy && <Loader2 size={14} className="animate-spin" />}
                   Kaydet

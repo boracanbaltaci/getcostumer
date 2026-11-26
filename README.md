@@ -10,21 +10,28 @@ veya **eski görünümlü web sitesi** olan işletmeleri bulan tek ekranlı uygu
 3. Backend, Google Places API (New) ile çevredeki işletmeleri tarar; sitesi olanların
    ana sayfasını indirip "eski görünümlü mü?" analizini yapar (HTTPS yokluğu, mobil
    uyum etiketi yokluğu, eski doctype, terk edilmiş etiketler, Flash, eski CMS…).
-4. Sonuçlar tabloda listelenir: **Firma Adı | Konum | Telefon | Web Sitesi | Fırsat | Aksiyon**.
+4. Sonuçlar tabloda listelenir: **☑ | Firma Adı | Konum | Telefon | E-posta | Web Sitesi | Fırsat | Aksiyon**.
    - `Site yok` — Google kaydında web sitesi yok
    - Sosyal medya adı (`Facebook`, `Instagram`, `WhatsApp`…) — site yerine sosyal medya profili kayıtlı
    - `Eski görünümlü` — site var ama teknik olarak eski
    - `Ulaşılamadı` — site açılmıyor / park sayfası
+   - `E-posta` — site ana sayfasından çıkarılan adres (bulunamadıysa `—`)
 5. Her işletmeye **fırsat puanı** (0-100) ve **A/B/C önceliği** verilir; tablo puana
    göre azalan sıralanır. Puan, açıklanabilir faktörlerin toplamıdır (hover'da
    dökümü görünür): site durumu (yok +30 / eski +20 / ulaşılamadı +15), sektör
    uygunluğu (`primaryType` → randevu +15, perakende +15, yeme-içme +10, ofis +10,
    servis +8), telefon +5, şirket unvanı +5, bilişim firması −10. Yanındaki
    etiketler önerilen hizmeti gösterir (ör. "Kurumsal web sitesi", "E-ticaret").
-6. Aksiyon sütunundaki **e-posta** ve **SMS** ikonları taslak mesaj modal'ı açar
-   (gönderim henüz bağlı değildir; metin yazıp Gönder demek modal'ı kapatır).
-   Modal'ın üstündeki açılır listeden **Hızlı Mesajlar** ekranında kayıtlı
-   şablonlar seçilip metni doldurur.
+6. Aksiyon sütunundaki **e-posta** ikonu gönderim modal'ı açar: **Kime** (siteden
+   bulunan adres dolu gelir; yoksa iletişim sayfaları taranıp önerilir, elle de
+   yazılır), **Konu** ve **Mesaj**. `{firma_adi}` tutucusu her alıcıda işletme
+   adıyla değişir. SMTP `.env`'de tanımlıysa Gönder gerçekten mail atar; tek
+   alıcı hatası diğerlerini durdurmaz.
+   Tablodaki **checkbox** ile seçim yapıp üst-sağdaki **Toplu e-posta gönder**
+   butonuyla aynı mesajı birden çok işletmeye gönderebilirsiniz (her alıcıya
+   ayrı mail gider). **SMS** ikonu taslak modal'ı açar (gönderim henüz bağlı
+   değildir). Açılır listeden **Hızlı Mesajlar** şablonları seçilir; şablonun
+   başlığı konuyu, metni gövdeyi doldurur.
 
 Her başarılı tarama sonucuyla birlikte veritabanına (Docker'da **PostgreSQL**,
 yerelde **SQLite** `data/scans.db`) kaydedilir;
@@ -48,7 +55,8 @@ taşınan bir oturum token'ıdır (`SESSION_TTL_DAYS` gün geçerli).
 ## Teknoloji
 
 - **Backend:** Python + FastAPI — `backend/app/` (`services/places.py` Google istemcisi,
-  `services/sitescan.py` site analizi, `services/scoring.py` fırsat puanı,
+  `services/sitescan.py` site analizi, `services/emailscan.py` siteden e-posta
+  çıkarma, `services/mailer.py` SMTP gönderim, `services/scoring.py` fırsat puanı,
   `services/store.py` tarama/favori/kullanıcı kayıtları, `services/auth.py` giriş + oturum)
 - **Frontend:** Next.js + TypeScript + Tailwind + Leaflet (react-leaflet) — `frontend/src/`,
   ekranlar: Giriş, Tarama, Önceki Taramalar, Favoriler, Hızlı Mesajlar
@@ -129,6 +137,11 @@ Bkz. `.env.example`. Önemlileri:
 | `PLACES_MAX_CALLS` | Tarama başına Places çağrı üst sınırı (vars. 9) |
 | `WEBSITE_CHECK_LIMIT` | Site analizi yapılacak en fazla işletme (vars. 60) |
 | `CORS_ORIGINS` | Backend'e doğrudan erişecek kökenler |
+| `SMTP_HOST` / `SMTP_PORT` | E-posta gönderim sunucusu (587 STARTTLS / 465 SSL; boş = gönderim kapalı) |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | SMTP kimliği (Gmail'de uygulama şifresi) |
+| `SMTP_FROM` | Gönderen adresi (boş = `SMTP_USERNAME`) |
+| `SMTP_TLS` | STARTTLS kullan (vars. true; 465'te yok sayılır) |
+| `EMAIL_DISCOVER_MAX_SITES` | E-posta kazıma isteği başına site üst sınırı (vars. 20) |
 | `DATABASE_URL` | Postgres bağlantı dizesi (boş = SQLite; Docker'da compose ayarlar) |
 | `POSTGRES_PASSWORD` | Docker `db` servisi parolası (vars. radar) |
 | `DB_PATH` | Geçmiş SQLite dosyası (vars. `data/scans.db`) |

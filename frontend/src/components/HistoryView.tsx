@@ -22,7 +22,7 @@ export default function HistoryView({ favoritesOnly = false, favoriteIds, onTogg
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
+  const [modal, setModal] = useState<{ kind: MessageKind; businesses: Business[] } | null>(null);
 
   useEffect(() => {
     (favoritesOnly ? listFavorites() : listScans())
@@ -138,8 +138,9 @@ export default function HistoryView({ favoritesOnly = false, favoriteIds, onTogg
                     )}
                     {rec && !loadingIds.has(s.id) && (
                       <ResultsTable businesses={rec.businesses}
-                                    onEmail={(b) => setModal({ kind: "email", business: b })}
-                                    onSms={(b) => setModal({ kind: "sms", business: b })}
+                                    onEmail={(b) => setModal({ kind: "email", businesses: [b] })}
+                                    onSms={(b) => setModal({ kind: "sms", businesses: [b] })}
+                                    onBulkEmail={(bs) => setModal({ kind: "email", businesses: bs })}
                                     favoriteIds={favoriteIds}
                                     onToggleFavorite={onToggleFavorite} />
                     )}
@@ -151,7 +152,7 @@ export default function HistoryView({ favoritesOnly = false, favoriteIds, onTogg
         </ul>
       </section>
 
-      {modal && <MessageModal kind={modal.kind} business={modal.business} onClose={() => setModal(null)} />}
+      {modal && <MessageModal kind={modal.kind} businesses={modal.businesses} onClose={() => setModal(null)} />}
     </>
   );
 }

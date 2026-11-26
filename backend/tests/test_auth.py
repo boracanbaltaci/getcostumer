@@ -139,9 +139,11 @@ def test_hizli_mesajlar_ekle_listele_sil(client):
     _login(client)
     assert client.get("/api/quick-messages").json() == []
 
-    r = client.post("/api/quick-messages", json={"text": "Merhaba, sitenizi yenileyebiliriz."})
+    r = client.post("/api/quick-messages",
+                    json={"title": "Teklif", "text": "Merhaba, sitenizi yenileyebiliriz."})
     assert r.status_code == 201
     mid = r.json()["id"]
+    assert r.json()["title"] == "Teklif"
     assert [m["id"] for m in client.get("/api/quick-messages").json()] == [mid]
 
     assert client.delete(f"/api/quick-messages/{mid}").status_code == 204
@@ -151,19 +153,23 @@ def test_hizli_mesajlar_ekle_listele_sil(client):
 
 def test_hizli_mesaj_duzenle(client):
     _login(client)
-    mid = client.post("/api/quick-messages", json={"text": "eski"}).json()["id"]
+    mid = client.post("/api/quick-messages",
+                      json={"title": "eski", "text": "eski"}).json()["id"]
 
     assert client.put(f"/api/quick-messages/{mid}",
-                      json={"text": "  yeni metin  "}).status_code == 204
+                      json={"title": "Yeni konu", "text": "  yeni metin  "}).status_code == 204
     msgs = client.get("/api/quick-messages").json()
+    assert msgs[0]["title"] == "Yeni konu"
     assert msgs[0]["text"] == "yeni metin"
 
-    assert client.put("/api/quick-messages/yok", json={"text": "x"}).status_code == 404
+    assert client.put("/api/quick-messages/yok",
+                      json={"title": "x", "text": "x"}).status_code == 404
 
 
 def test_hizli_mesajlar_kullanici_bazli(client):
     _login(client)
-    mid = client.post("/api/quick-messages", json={"text": "taslak"}).json()["id"]
+    mid = client.post("/api/quick-messages",
+                      json={"title": "t", "text": "taslak"}).json()["id"]
     store.create_user("veli", auth.hash_password("gizli-sifre"))
     with TestClient(app) as c2:
         _login(c2, username="veli", password="gizli-sifre")

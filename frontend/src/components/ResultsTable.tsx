@@ -59,27 +59,37 @@ function matches(b: Business, f: StatusFilter): boolean {
   return b.website_status !== "yok"; // "var": sitesi olanlar (eski + ulaşılamadı)
 }
 
-const HEAD = (
-  <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-    <tr>
-      <th className="px-4 py-3">Firma Adı</th>
-      <th className="px-4 py-3">Konum</th>
-      <th className="px-4 py-3">Telefon</th>
-      <th className="px-4 py-3">Web Sitesi</th>
-      <th className="px-4 py-3">Fırsat</th>
-      <th className="px-4 py-3 text-right">Aksiyon</th>
-    </tr>
-  </thead>
-);
+function head(allChecked: boolean, onToggleAll?: (checked: boolean) => void) {
+  return (
+    <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <tr>
+        <th className="w-10 px-4 py-3">
+          <input type="checkbox" checked={allChecked} aria-label="Tümünü seç"
+                 onChange={(e) => onToggleAll?.(e.target.checked)}
+                 className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+        </th>
+        <th className="px-4 py-3">Firma Adı</th>
+        <th className="px-4 py-3">Konum</th>
+        <th className="px-4 py-3">Telefon</th>
+        <th className="px-4 py-3">E-posta</th>
+        <th className="px-4 py-3">Web Sitesi</th>
+        <th className="px-4 py-3">Fırsat</th>
+        <th className="px-4 py-3 text-right">Aksiyon</th>
+      </tr>
+    </thead>
+  );
+}
 
-export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, onToggleFavorite }: {
+export default function ResultsTable({ businesses, onEmail, onSms, onBulkEmail, favoriteIds, onToggleFavorite }: {
   businesses: Business[];
   onEmail: (b: Business) => void;
   onSms: (b: Business) => void;
+  onBulkEmail?: (selected: Business[]) => void;
   favoriteIds?: Set<string>;
   onToggleFavorite?: (b: Business) => void;
 }) {
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   if (!businesses.length) return null;
 
   const counts: Record<StatusFilter, number> = {
@@ -95,10 +105,30 @@ export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, 
     { key: "eski", label: "Eski görünümlü" },
   ];
   const rows = businesses.filter((b) => matches(b, filter));
+  const selectedRows = businesses.filter((b) => selected.has(b.place_id));
+  const allChecked = rows.length > 0 && rows.every((b) => selected.has(b.place_id));
+
+  function toggleAll(checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const b of rows) {
+        if (checked) next.add(b.place_id); else next.delete(b.place_id);
+      }
+      return next;
+    });
+  }
+
+  function toggleOne(b: Business, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(b.place_id); else next.delete(b.place_id);
+      return next;
+    });
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap gap-1.5 border-b border-slate-100 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-3 py-2.5">
         {filters.map((f) => (
           <button key={f.key} type="button" onClick={() => setFilter(f.key)}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition ${
@@ -109,10 +139,18 @@ export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, 
             {f.label} <span className="tabular-nums">({counts[f.key]})</span>
           </button>
         ))}
+        {onBulkEmail && (
+          <button type="button" onClick={() => onBulkEmail(selectedRows)}
+                  disabled={!selectedRows.length}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400">
+            <Mail size={13} />
+            Toplu e-posta gönder{selectedRows.length ? ` (${selectedRows.length})` : ""}
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
-          {HEAD}
+          {head(allChecked, toggleAll)}
           <tbody className="divide-y divide-slate-100">
             {rows.map((b) => {
               const badge = STATUS_BADGE[b.website_status];
@@ -121,11 +159,22 @@ export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, 
                 : null;
               return (
                 <tr key={b.place_id} className="hover:bg-slate-50">
+                  <td className="w-10 px-4 py-3">
+                    <input type="checkbox" checked={selected.has(b.place_id)}
+                           aria-label={`${b.name} seç`}
+                           onChange={(e) => toggleOne(b, e.target.checked)}
+                           className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                  </td>
                   <td className="max-w-56 px-4 py-3 font-medium text-slate-900">{b.name}</td>
                   <td className="max-w-72 px-4 py-3 text-slate-600">{b.address || "—"}</td>
                   <td className="whitespace-nowrap px-4 py-3">
                     {b.phone
                       ? <a href={`tel:${b.phone.replace(/[^+\d]/g, "")}`} className="text-brand-600 hover:underline">{b.phone}</a>
+                      : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="max-w-56 px-4 py-3">
+                    {b.email
+                      ? <a href={`mailto:${b.email}`} className="block max-w-52 truncate text-brand-600 hover:underline">{b.email}</a>
                       : <span className="text-slate-400">—</span>}
                   </td>
                   <td className="max-w-60 px-4 py-3">
@@ -185,7 +234,7 @@ export default function ResultsTable({ businesses, onEmail, onSms, favoriteIds, 
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-400">Bu filtreye uyan işletme yok.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-sm text-slate-400">Bu filtreye uyan işletme yok.</td></tr>
             )}
           </tbody>
         </table>
@@ -204,11 +253,11 @@ export function ResultsTableSkeleton({ rows = 8 }: { rows?: number }) {
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          {HEAD}
+          {head(false)}
           <tbody>
             {Array.from({ length: rows }).map((_, i) => (
               <tr key={i} className="border-b border-slate-50">
-                {[40, 56, 24, 48, 32, 16].map((w, j) => (
+                {[10, 40, 56, 24, 40, 48, 32, 16].map((w, j) => (
                   <td key={j} className="px-4 py-3.5">
                     <div className={`h-4 animate-pulse rounded bg-slate-100`} style={{ width: `${w}%` }} />
                   </td>

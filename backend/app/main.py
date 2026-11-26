@@ -9,11 +9,12 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.schemas import (BusinessFavoriteOut, BusinessOut, ConfigOut, FavoriteBusinessIn,
-                         LoginRequest, QuickMessageIn, QuickMessageOut, ScanRecordOut,
-                         ScanRequest, ScanResponse, ScanStats, ScanSummaryOut, ScoreFactor,
-                         UserOut)
-from app.services import auth, places, scoring, sitescan, store
+from app.schemas import (BusinessFavoriteOut, BusinessOut, ConfigOut, EmailDiscoverIn,
+                         EmailDiscoverOut, FavoriteBusinessIn, LoginRequest,
+                         QuickMessageIn, QuickMessageOut, ScanRecordOut, ScanRequest,
+                         ScanResponse, ScanStats, ScanSummaryOut, ScoreFactor,
+                         SendEmailIn, SendEmailOut, UserOut)
+from app.services import auth, emailscan, mailer, places, scoring, sitescan, store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -45,7 +46,8 @@ def health():
 
 @app.get("/api/config", response_model=ConfigOut)
 def get_config():
-    return ConfigOut(google_places_configured=settings.google_configured)
+    return ConfigOut(google_places_configured=settings.google_configured,
+                     smtp_configured=settings.smtp_configured)
 
 
 # ---- Auth ----
@@ -108,7 +110,8 @@ def scan(req: ScanRequest, user: dict = Depends(auth.get_current_user)):
         if verdict.status == "modern":
             return None
         return BusinessOut(**{**rec, "website": verdict.final_url or url},
-                           website_status=verdict.status, website_notes=verdict.notes)
+                           website_status=verdict.status, website_notes=verdict.notes,
+                           email=verdict.emails[0] if verdict.emails else "")
 
     checked = [r for r in records if r.get("website")][: settings.WEBSITE_CHECK_LIMIT]
     if len([r for r in records if r.get("website")]) > settings.WEBSITE_CHECK_LIMIT:
@@ -223,13 +226,13 @@ def list_quick_messages(user: dict = Depends(auth.get_current_user)):
 
 @app.post("/api/quick-messages", status_code=201, response_model=QuickMessageOut)
 def add_quick_message(req: QuickMessageIn, user: dict = Depends(auth.get_current_user)):
-    return store.add_quick_message(user["id"], req.text)
+    return store.add_quick_message(user["id"], req.title, req.text)
 
 
 @app.put("/api/quick-messages/{msg_id}", status_code=204)
 def update_quick_message(msg_id: str, req: QuickMessageIn,
                          user: dict = Depends(auth.get_current_user)):
-    if not store.update_quick_message(user["id"], msg_id, req.text):
+    if not store.update_quick_message(user["id"], msg_id, req.title, req.text):
         raise HTTPException(status_code=404, detail="Mesaj kaydı bulunamadı")
 
 
@@ -237,3 +240,43 @@ def update_quick_message(msg_id: str, req: QuickMessageIn,
 def remove_quick_message(msg_id: str, user: dict = Depends(auth.get_current_user)):
     if not store.delete_quick_message(user["id"], msg_id):
         raise HTTPException(status_code=404, detail="Mesaj kaydı bulunamadı")
+
+
+# ---- E-posta ----
+
+
+@app.post("/api/email/discover", response_model=EmailDiscoverOut)
+def discover_emails(req: EmailDiscoverIn, user: dict = Depends(auth.get_current_user)):
+    """Verilen sitelerde e-posta ara; site başına liste döner (bulunamazsa boş)."""
+    sites = [w.strip() for w in req.websites
+             if w.strip() and not sitescan.is_social_site(w.strip())]
+    sites = sites[: settings.EMAIL_DISCOVER_MAX_SITES]
+
+    def probe(url: str) -> list[str]:
+        try:
+            return emailscan.discover_emails(url)
+        except Exception as exc:  # tek site hatası diğerlerini etkilemesin
+            logger.warning("E-posta kazıma başarısız %s: %s", url, exc)
+            return []
+
+    results: dict[str, list[str]] = {}
+    with ThreadPoolExecutor(max_workers=settings.EMAIL_DISCOVER_WORKERS) as pool:
+        for url, emails in zip(sites, pool.map(probe, sites)):
+            results[url] = emails
+    return EmailDiscoverOut(results=results)
+
+
+@app.post("/api/email/send", response_model=SendEmailOut)
+def send_email(req: SendEmailIn, user: dict = Depends(auth.get_current_user)):
+    if not settings.smtp_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="SMTP tanımlı değil; backend .env dosyasına SMTP_HOST vb. ekleyip yeniden başlatın.",
+        )
+    try:
+        out = mailer.send_bulk(
+            [r.model_dump() for r in req.recipients], req.subject, req.body)
+    except Exception as exc:  # bağlantı/giriş hatası — alıcı hataları send_bulk içinde
+        logger.exception("SMTP gönderimi başarısız")
+        raise HTTPException(status_code=502, detail=f"E-posta gönderilemedi: {exc}")
+    return SendEmailOut(**out)

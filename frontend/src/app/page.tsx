@@ -37,7 +37,7 @@ export default function Home() {
   const [result, setResult] = useState<ScanResponse | null>(null);
   const [lastScanAt, setLastScanAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ kind: MessageKind; business: Business } | null>(null);
+  const [modal, setModal] = useState<{ kind: MessageKind; businesses: Business[] } | null>(null);
   const [bizFavorites, setBizFavorites] = useState<BusinessFavorite[]>([]);
   const [scans, setScans] = useState<ScanSummary[]>([]);
   const favBizIds = useMemo(() => new Set(bizFavorites.map((f) => f.place_id)), [bizFavorites]);
@@ -233,8 +233,9 @@ export default function Home() {
                 )}
                 {result.businesses.length
                   ? <ResultsTable businesses={result.businesses}
-                                  onEmail={(b) => setModal({ kind: "email", business: b })}
-                                  onSms={(b) => setModal({ kind: "sms", business: b })}
+                                  onEmail={(b) => setModal({ kind: "email", businesses: [b] })}
+                                  onSms={(b) => setModal({ kind: "sms", businesses: [b] })}
+                                  onBulkEmail={(bs) => setModal({ kind: "email", businesses: bs })}
                                   favoriteIds={favBizIds}
                                   onToggleFavorite={toggleBizFavorite} />
                   : <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 shadow-sm">
@@ -247,7 +248,7 @@ export default function Home() {
       </main>
 
       {modal && (
-        <MessageModal kind={modal.kind} business={modal.business} onClose={() => setModal(null)} />
+        <MessageModal kind={modal.kind} businesses={modal.businesses} onClose={() => setModal(null)} />
       )}
     </div>
   );
